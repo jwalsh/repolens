@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+    <h2>Package Repository</h2>
+    <form id="package-form">
+        <input type="text" id="repo-url" placeholder="Enter repository URL" required>
+        <button type="submit">Package Repository</button>
+    </form>
+
+    <h2>Analyze Repository</h2>
+    <form id="analyze-form">
+        <input type="number" id="repo-id" placeholder="Enter repository ID" required>
+        <select id="analysis-type" required>
+            <option value="file_count">File Count</option>
+            <option value="commit_count">Commit Count</option>
+            <option value="branch_count">Branch Count</option>
+            <option value="file_types">File Types</option>
+        </select>
+        <button type="submit">Analyze Repository</button>
+    </form>
+
+    <div id="results"></div>
+{% endblock %}
