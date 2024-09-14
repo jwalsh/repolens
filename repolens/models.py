@@ -1,4 +1,4 @@
-from repolens import db
+from repolens.database import db
 from datetime import datetime
 
 class Repository(db.Model):

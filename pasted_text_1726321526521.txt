@@ -1,0 +1,87 @@
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.31.196.77:5000
+Press CTRL+C to quit
+172.31.196.77 - - [14/Sep/2024 13:33:46] "GET / HTTP/1.1" 200 -
+172.31.196.77 - - [14/Sep/2024 13:33:46] "GET /static/css/style.css HTTP/1.1" 304 -
+172.31.196.77 - - [14/Sep/2024 13:33:47] "GET /static/js/main.js HTTP/1.1" 304 -
+172.31.196.77 - - [14/Sep/2024 13:33:47] "GET / HTTP/1.1" 200 -
+172.31.196.77 - - [14/Sep/2024 13:33:47] "GET /static/css/style.css HTTP/1.1" 200 -
+172.31.196.77 - - [14/Sep/2024 13:33:47] "GET /static/js/main.js HTTP/1.1" 200 -
+172.31.196.77 - - [14/Sep/2024 13:33:58] "GET / HTTP/1.1" 200 -
+172.31.196.77 - - [14/Sep/2024 13:33:58] "GET /static/css/style.css HTTP/1.1" 304 -
+172.31.196.77 - - [14/Sep/2024 13:33:59] "GET /static/js/main.js HTTP/1.1" 304 -
+172.31.196.77 - - [14/Sep/2024 13:33:59] "GET /favicon.ico HTTP/1.1" 404 -
+172.31.196.77 - - [14/Sep/2024 13:44:53] "GET / HTTP/1.1" 200 -
+172.31.196.77 - - [14/Sep/2024 13:44:54] "GET /static/css/style.css HTTP/1.1" 200 -
+172.31.196.77 - - [14/Sep/2024 13:44:54] "GET /static/js/main.js HTTP/1.1" 200 -
+[2024-09-14 13:45:08,269] ERROR in app: Exception on /api/package [POST]
+Traceback (most recent call last):
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 1473, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 882, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 880, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 865, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/repolens/api.py", line 14, in package
+    repo_id, error = package_repository(data['repo_url'])
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/repolens/packager.py", line 56, in package_repository
+    db.session.commit()
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/scoping.py", line 597, in commit
+    return self._proxied.commit()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2028, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 1313, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 1288, in _prepare_impl
+    self.session.flush()
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 4352, in flush
+    self._flush(objects)
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 4487, in _flush
+    with util.safe_reraise():
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 4448, in _flush
+    flush_context.execute()
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/persistence.py", line 60, in save_obj
+    for (
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/persistence.py", line 223, in _organize_states_for_save
+    for state, dict_, mapper, connection in _connections_for_states(
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/persistence.py", line 1753, in _connections_for_states
+    connection = uowtransaction.transaction.connection(base_mapper)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in connection
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/state_changes.py", line 139, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 1038, in connection
+    bind = self.session.get_bind(bindkey, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/flask_sqlalchemy/session.py", line 53, in get_bind
+    engines = self._db.engines
+              ^^^^^^^^^^^^^^^^
+  File "/home/runner/RepoLens/.pythonlibs/lib/python3.11/site-packages/flask_sqlalchemy/extension.py", line 690, in engines
+    raise RuntimeError(
+RuntimeError: The current Flask app is not registered with this 'SQLAlchemy' instance. Did you forget to call 'init_app', or did you create multiple 'SQLAlchemy' instances?
+172.31.196.77 - - [14/Sep/2024 13:45:08] "POST /api/package HTTP/1.1" 500 -

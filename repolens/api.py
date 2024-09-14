@@ -1,7 +1,8 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from repolens.packager import package_repository
 from repolens.analyzer import analyze_repository
 from repolens.models import Repository, Analysis
+from repolens.database import db
 
 api_bp = Blueprint('api', __name__)
 
@@ -11,7 +12,10 @@ def package():
     if not data or 'repo_url' not in data:
         return jsonify({'error': 'Missing repo_url'}), 400
 
-    repo_id = package_repository(data['repo_url'])
+    with current_app.app_context():
+        repo_id, error = package_repository(data['repo_url'])
+    if error:
+        return jsonify({'error': error}), 500
     return jsonify({'repo_id': repo_id}), 201
 
 @api_bp.route('/analyze', methods=['POST'])
@@ -20,7 +24,8 @@ def analyze():
     if not data or 'repo_id' not in data or 'analysis_type' not in data:
         return jsonify({'error': 'Missing repo_id or analysis_type'}), 400
 
-    analysis_id = analyze_repository(data['repo_id'], data['analysis_type'])
+    with current_app.app_context():
+        analysis_id = analyze_repository(data['repo_id'], data['analysis_type'])
     if not analysis_id:
         return jsonify({'error': 'Invalid repo_id or analysis_type'}), 400
 
@@ -28,7 +33,8 @@ def analyze():
 
 @api_bp.route('/repository/<int:repo_id>', methods=['GET'])
 def get_repository(repo_id):
-    repository = Repository.query.get(repo_id)
+    with current_app.app_context():
+        repository = Repository.query.get(repo_id)
     if not repository:
         return jsonify({'error': 'Repository not found'}), 404
 
@@ -41,7 +47,8 @@ def get_repository(repo_id):
 
 @api_bp.route('/analysis/<int:analysis_id>', methods=['GET'])
 def get_analysis(analysis_id):
-    analysis = Analysis.query.get(analysis_id)
+    with current_app.app_context():
+        analysis = Analysis.query.get(analysis_id)
     if not analysis:
         return jsonify({'error': 'Analysis not found'}), 404
 
