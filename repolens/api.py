@@ -1,10 +1,15 @@
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, send_file
 from repolens.packager import package_repository
 from repolens.analyzer import analyze_repository
 from repolens.models import Repository, Analysis
 from repolens.database import db
+from flask_caching import Cache
+import tempfile
+import json
+import os
 
 api_bp = Blueprint('api', __name__)
+cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
 
 @api_bp.route('/package', methods=['POST'])
 def package():
@@ -16,7 +21,9 @@ def package():
         repo_id, error = package_repository(data['repo_url'])
     if error:
         return jsonify({'error': error}), 500
-    return jsonify({'repo_id': repo_id}), 201
+    
+    repository = Repository.query.get(repo_id)
+    return jsonify({'repo_id': repo_id, 'repo_name': repository.name}), 201
 
 @api_bp.route('/analyze', methods=['POST'])
 def analyze():
@@ -55,7 +62,40 @@ def get_analysis(analysis_id):
     return jsonify({
         'id': analysis.id,
         'repository_id': analysis.repository_id,
+        'repository_name': analysis.repository.name,
         'analysis_type': analysis.analysis_type,
         'result': analysis.result,
         'created_at': analysis.created_at.isoformat()
     })
+
+@api_bp.route('/repository/repolens', methods=['GET'])
+def get_repolens_repository():
+    with current_app.app_context():
+        repository = Repository.query.filter_by(name='repolens').first()
+    if not repository:
+        return jsonify({'error': 'RepoLens repository not found'}), 404
+
+    return jsonify({
+        'id': repository.id,
+        'name': repository.name,
+        'url': repository.url,
+        'created_at': repository.created_at.isoformat()
+    })
+
+@api_bp.route('/download/<int:repo_id>', methods=['GET'])
+@cache.cached(timeout=300)  # Cache for 5 minutes
+def download_repository_content(repo_id):
+    with current_app.app_context():
+        repository = Repository.query.get(repo_id)
+    if not repository:
+        return jsonify({'error': 'Repository not found'}), 404
+
+    # Create a temporary file to store the repository content
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
+        json.dump(repository.packaged_data, temp_file, indent=2)
+
+    # Send the file as an attachment
+    return send_file(temp_file.name, as_attachment=True, download_name=f"{repository.name}_content.txt")
+
+def init_app(app):
+    cache.init_app(app)

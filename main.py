@@ -1,5 +1,5 @@
 from flask import Flask, render_template
-from repolens.api import api_bp
+from repolens.api import api_bp, init_app as init_api
 from repolens.database import db
 import os
 
@@ -15,6 +15,9 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(api_bp, url_prefix='/api')
+
+    # Initialize API (including cache)
+    init_api(app)
 
     @app.route('/')
     def index():

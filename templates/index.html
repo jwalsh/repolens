@@ -1,25 +1,55 @@
 {% extends "base.html" %}
 
-{% block title %}Home{% endblock %}
+{% block title %}Repository Analysis{% endblock %}
 
 {% block content %}
-    <h2>Package Repository</h2>
-    <form id="package-form">
-        <input type="text" id="repo-url" placeholder="Enter repository URL" required>
-        <button type="submit">Package Repository</button>
-    </form>
+    <section id="intro-section">
+        <h2>Welcome to RepoLens</h2>
+        <p>RepoLens is a powerful tool for packaging, presenting, and analyzing project repositories. Get started by packaging a repository or running an analysis.</p>
+    </section>
 
-    <h2>Analyze Repository</h2>
-    <form id="analyze-form">
-        <input type="number" id="repo-id" placeholder="Enter repository ID" required>
-        <select id="analysis-type" required>
-            <option value="file_count">File Count</option>
-            <option value="commit_count">Commit Count</option>
-            <option value="branch_count">Branch Count</option>
-            <option value="file_types">File Types</option>
-        </select>
-        <button type="submit">Analyze Repository</button>
-    </form>
+    <div class="two-column-layout">
+        <div class="column">
+            <section id="package-section">
+                <h2>Package Repository</h2>
+                <form id="package-form">
+                    <label for="repo-url">Repository URL:</label>
+                    <input type="text" id="repo-url" placeholder="Enter GitHub repository URL" required>
+                    <button type="submit">Package Repository</button>
+                </form>
+            </section>
 
-    <div id="results"></div>
+            <section id="analyze-section">
+                <h2>Analyze Repository</h2>
+                <form id="analyze-form">
+                    <label for="repo-id">Repository ID:</label>
+                    <input type="number" id="repo-id" placeholder="Enter the repository ID" required>
+                    <label for="analysis-type">Analysis Type:</label>
+                    <select id="analysis-type" required>
+                        <option value="file_count" selected>File Count</option>
+                        <option value="commit_count">Commit Count</option>
+                        <option value="branch_count">Branch Count</option>
+                        <option value="file_types">File Types</option>
+                    </select>
+                    <button type="submit">Analyze Repository</button>
+                </form>
+            </section>
+
+            <section id="quick-analysis-section">
+                <h2>Quick Analysis</h2>
+                <form id="quick-analysis-form">
+                    <label for="quick-repo-url">Repository URL:</label>
+                    <input type="text" id="quick-repo-url" placeholder="Enter GitHub repository URL" required>
+                    <button type="submit">Package and Analyze</button>
+                </form>
+            </section>
+        </div>
+
+        <div class="column">
+            <section id="results-section">
+                <h2>Results</h2>
+                <div id="results"></div>
+            </section>
+        </div>
+    </div>
 {% endblock %}
