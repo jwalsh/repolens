@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const packageForm = document.getElementById('package-form');
     const analyzeForm = document.getElementById('analyze-form');
     const quickAnalysisForm = document.getElementById('quick-analysis-form');
+    const screenshotForm = document.getElementById('screenshot-form');
     const resultsDiv = document.getElementById('results');
     const loginButton = document.getElementById('login-button');
 
@@ -139,6 +140,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 showError(packageData.error);
+            }
+        } catch (error) {
+            showError(error.message);
+        }
+    });
+
+    screenshotForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const url = document.getElementById('screenshot-url').value;
+        
+        showLoading('Taking screenshot...');
+        
+        try {
+            const response = await fetch('/api/screenshot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url: url }),
+            });
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                a.download = 'screenshot.png';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(downloadUrl);
+                resultsDiv.innerHTML = '<p>Screenshot taken and downloaded successfully!</p>';
+            } else {
+                const errorData = await response.json();
+                showError(errorData.error);
             }
         } catch (error) {
             showError(error.message);

@@ -7,6 +7,10 @@ from flask_caching import Cache
 import tempfile
 import json
 import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
 
 api_bp = Blueprint('api', __name__)
 cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
@@ -96,6 +100,41 @@ def download_repository_content(repo_id):
 
     # Send the file as an attachment
     return send_file(temp_file.name, as_attachment=True, download_name=f"{repository.name}_content.txt")
+
+@api_bp.route('/screenshot', methods=['POST'])
+def take_screenshot():
+    data = request.json
+    if not data or 'url' not in data:
+        return jsonify({'error': 'Missing url'}), 400
+
+    url = data['url']
+    
+    # Set up Chrome options
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    # Set up the Chrome WebDriver
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+
+    try:
+        # Navigate to the URL and take a screenshot
+        driver.get(url)
+        screenshot = driver.get_screenshot_as_png()
+
+        # Save the screenshot to a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+            temp_file.write(screenshot)
+            temp_file_path = temp_file.name
+
+        # Send the file as an attachment
+        return send_file(temp_file_path, mimetype='image/png', as_attachment=True, download_name='screenshot.png')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        driver.quit()
 
 def init_app(app):
     cache.init_app(app)
