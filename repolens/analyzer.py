@@ -1,4 +1,4 @@
-from codenexus.models import Repository, Analysis, db
+from repolens.models import Repository, Analysis, db
 
 def analyze_repository(repo_id, analysis_type):
     repository = Repository.query.get(repo_id)

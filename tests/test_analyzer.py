@@ -1,6 +1,6 @@
 import unittest
-from codenexus.analyzer import analyze_repository
-from codenexus.models import Repository, Analysis, db
+from repolens.analyzer import analyze_repository
+from repolens.models import Repository, Analysis, db
 from main import app
 
 class TestAnalyzer(unittest.TestCase):

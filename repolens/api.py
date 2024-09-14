@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
-from codenexus.packager import package_repository
-from codenexus.analyzer import analyze_repository
-from codenexus.models import Repository, Analysis
+from repolens.packager import package_repository
+from repolens.analyzer import analyze_repository
+from repolens.models import Repository, Analysis
 
 api_bp = Blueprint('api', __name__)
 

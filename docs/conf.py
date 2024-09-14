@@ -2,9 +2,9 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'CodeNexus'
-copyright = '2023, CodeNexus Team'
-author = 'CodeNexus Team'
+project = 'RepoLens'
+copyright = '2023, RepoLens Team'
+author = 'RepoLens Team'
 
 # The full version, including alpha/beta/rc tags
 release = '0.1.0'

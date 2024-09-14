@@ -1,5 +1,5 @@
 from flask import Flask, render_template
-from codenexus.api import api_bp
+from repolens.api import api_bp
 import os
 
 app = Flask(__name__)

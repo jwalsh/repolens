@@ -1,6 +1,6 @@
 import unittest
-from codenexus.packager import package_repository
-from codenexus.models import Repository, db
+from repolens.packager import package_repository
+from repolens.models import Repository, db
 from main import app
 
 class TestPackager(unittest.TestCase):

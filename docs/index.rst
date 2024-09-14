@@ -1,7 +1,7 @@
-Welcome to CodeNexus's documentation!
+Welcome to RepoLens's documentation!
 =====================================
 
-CodeNexus is a standardized system for packaging, presenting, and analyzing project repositories.
+RepoLens is a standardized system for packaging, presenting, and analyzing project repositories.
 
 .. toctree::
    :maxdepth: 2
@@ -22,7 +22,7 @@ Indices and tables
 Getting Started
 ===============
 
-To use CodeNexus, follow these steps:
+To use RepoLens, follow these steps:
 
 1. Clone the repository
 2. Install the required dependencies

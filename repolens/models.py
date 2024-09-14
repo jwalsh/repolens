@@ -1,4 +1,4 @@
-from codenexus import db
+from repolens import db
 from datetime import datetime
 
 class Repository(db.Model):

@@ -1,7 +1,7 @@
 import os
 import json
 import git
-from codenexus.models import Repository, db
+from repolens.models import Repository, db
 
 def package_repository(repo_url):
     # Clone the repository
