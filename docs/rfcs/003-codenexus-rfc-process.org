@@ -1,0 +1,214 @@
+:PROPERTIES:
+:ID:       C45E7900-19F2-4A24-8E46-3BF8F5670C3A
+:END:
+#+TITLE: RFC 003: CodeNexus RFC Submission and Review Process
+#+AUTHOR: Claude (AI Project Coordinator)
+#+DATE: [2024-09-13 Fri]
+
+* IMPLEMENTING Metadata
+DEADLINE: <2024-09-16 Mon>
+:PROPERTIES:
+:ID:       8FFE5FE4-F6B3-4070-BC49-9D9C9863C103
+:END:
+- RFC Number: 003
+- Title: CodeNexus RFC Submission and Review Process
+- Author: Claude (AI Project Coordinator)
+- Status: IMPLEMENTING
+- Created: [2024-09-13 Fri]
+- Last Updated: [2024-09-14 Sat]
+
+* Abstract
+
+This RFC proposes a standardized process for submitting, reviewing, and managing Request for Comments (RFCs) within the CodeNexus project. The goal is to establish a clear workflow for proposing and coordinating changes, ensuring that all team members have a voice in the project's direction while maintaining efficiency and organization.
+
+* Author's Role and Responsibility
+
+As the AI Project Coordinator (Claude), my role includes facilitating communication and establishing processes for efficient collaboration. This RFC aims to create a structured approach to managing project proposals and changes, which falls under my responsibility of streamlining project workflows.
+
+* RFC Lifecycle States
+
+| State        | Description                                           |
+|--------------+-------------------------------------------------------|
+| DRAFT        | Initial creation and refinement of the RFC            |
+| SUBMITTED    | Formally submitted for consideration                  |
+| REVIEW       | Under active review by the community and stakeholders |
+| REVISE       | Undergoing revisions based on feedback                |
+| APPROVED     | Accepted and ready for implementation                 |
+| REJECTED     | Not accepted for implementation                       |
+| DEFERRED     | Postponed for future consideration                    |
+| WITHDRAWN    | Removed from consideration by the author(s)           |
+| IMPLEMENTING | Actively being implemented                            |
+| IMPLEMENTED  | Implementation is complete                            |
+| OBSOLETE     | No longer relevant or superseded by another RFC       |
+
+These states provide a comprehensive view of an RFC's lifecycle, from initial drafting to final resolution. They allow for various outcomes and situations that may arise during the RFC process.
+
+To implement these states in Emacs Org-mode, we can use the following Elisp code:
+
+#+BEGIN_SRC elisp :tangle 003-rfc-support.el
+  ;; Function to update RFC status and last updated date
+  (defun update-rfc-metadata ()
+    "Update the RFC status and last updated date based on the current TODO state."
+    (interactive)
+    (save-excursion
+      (goto-char (point-min))
+      (when (re-search-forward "^\\* \\(DRAFT\\|SUBMITTED\\|REVIEW\\|REVISE\\|APPROVED\\|REJECTED\\|DEFERRED\\|WITHDRAWN\\|IMPLEMENTING\\|IMPLEMENTED\\|OBSOLETE\\) Metadata" nil t)
+        (let ((new-status (match-string 1)))
+          ;; Update Status field
+          (re-search-forward "^- Status: .*$" nil t)
+          (replace-match (format "- Status: %s" new-status))
+          ;; Update Last Updated field
+          (re-search-forward "^- Last Updated: .*$" nil t)
+          (replace-match (format "- Last Updated: [%s]"
+                                 (format-time-string "%Y-%m-%d %a")))))))
+
+  ;; Add hook to org-after-todo-state-change-hook
+  (add-hook 'org-after-todo-state-change-hook 'update-rfc-metadata)
+
+  ;; Custom TODO keyword faces for RFC states
+  (setq org-todo-keywords
+        '((sequence
+           "DRAFT(d)" "SUBMITTED(s)" "REVIEW(r)" "REVISE(v)"
+           "APPROVED(a)" "REJECTED(x)" "DEFERRED(f)" "WITHDRAWN(w)"
+           "IMPLEMENTING(i)" "IMPLEMENTED(m)" "|" "OBSOLETE(o)")))
+
+  (setq org-todo-keyword-faces
+        '(("DRAFT" . (:foreground "gold" :weight bold))
+          ("SUBMITTED" . (:foreground "orange" :weight bold))
+          ("REVIEW" . (:foreground "deep sky blue" :weight bold))
+          ("REVISE" . (:foreground "tomato" :weight bold))
+          ("APPROVED" . (:foreground "lime green" :weight bold))
+          ("REJECTED" . (:foreground "red" :weight bold))
+          ("DEFERRED" . (:foreground "dark orchid" :weight bold))
+          ("WITHDRAWN" . (:foreground "gray" :weight bold))
+          ("IMPLEMENTING" . (:foreground "chocolate" :weight bold))
+          ("IMPLEMENTED" . (:foreground "forest green" :weight bold))
+          ("OBSOLETE" . (:foreground "dim gray" :weight bold))))
+
+  (defun display-rfc-state-description ()
+    "Display the long-form description of the current RFC state."
+    (interactive)
+    (let* ((state (org-get-todo-state))
+           (descriptions
+            '(("DRAFT" . "Work in Progress: Initial creation and refinement")
+              ("SUBMITTED" . "Awaiting Review: Formally submitted for consideration")
+              ("REVIEW" . "Under Scrutiny: Active community and stakeholder review")
+              ("REVISE" . "Feedback Integration: Undergoing revisions based on input")
+              ("APPROVED" . "Green Light: Accepted and ready for implementation")
+              ("REJECTED" . "Not Proceeding: Declined for implementation")
+              ("DEFERRED" . "On Hold: Postponed for future consideration")
+              ("WITHDRAWN" . "Retracted: Removed from consideration by author(s)")
+              ("IMPLEMENTING" . "In Progress: Actively being implemented")
+              ("IMPLEMENTED" . "Mission Accomplished: Implementation is complete")
+              ("OBSOLETE" . "Archived: No longer relevant or superseded")))
+           (description (cdr (assoc state descriptions))))
+      (if description
+          (message "RFC State: %s - %s" state description)
+        (message "Unknown RFC state: %s" state))))
+
+  ;; Local Variables:
+  ;; eval: (org-babel-tangle)
+  ;; org-babel-tangle-file: "rfc-support.el"
+  ;; End:
+#+END_SRC
+
+This configuration:
+1. Defines all the RFC states as TODO keywords in Org-mode.
+2. Assigns a unique letter as a shortcut for quick state changes.
+3. Uses the "|" separator to indicate that "OBSOLETE" is a final state.
+4. Defines distinct colors for each state to provide visual cues about the RFC's current status.
+
+By using these states and the accompanying Elisp configuration, teams can effectively track and manage RFCs throughout their entire lifecycle, from initial drafting to final resolution or obsolescence.
+
+* Submission Process
+
+1. Create a new file in the `docs/rfcs` directory with the naming convention `XXX-brief-title.org`, where XXX is the next available number.
+2. Use the following template for the RFC:
+
+#+BEGIN_SRC org
+,#+TITLE: RFC XXX: [Brief Title]
+,#+AUTHOR: [Your Name] ([Your Role])
+,#+DATE: [YYYY-MM-DD]
+
+,* Metadata
+- RFC Number: XXX
+- Title: [Full Title]
+- Author: [Your Name] ([Your Role])
+- Status: Draft
+- Created: [YYYY-MM-DD]
+- Last Updated: [YYYY-MM-DD]
+
+,* Abstract
+
+[A brief description of the proposal]
+
+,* Motivation
+
+[Why is this change necessary? What problem does it solve?]
+
+,* Proposal
+
+[Detailed description of the proposed change]
+
+,* Drawbacks
+
+[What are the potential drawbacks or limitations of this proposal?]
+
+,* Alternatives
+
+[What other approaches were considered? Why were they rejected?]
+
+,* Implementation Plan
+
+[How will this change be implemented? What are the steps?]
+
+,* Open Questions
+
+[Any unresolved issues or areas needing further discussion]
+#+END_SRC
+
+3. Submit a pull request with the new RFC file.
+
+* Review Process
+
+1. Initial Review (3-5 days):
+   - All team members are encouraged to comment on the RFC.
+   - The author addresses initial feedback and makes necessary revisions.
+
+2. Final Review (2-3 days):
+   - The Code Architect and Project Manager conduct a final review.
+   - They may request further changes or move to accept/reject the RFC.
+
+3. Decision:
+   - The RFC is either accepted, rejected, or sent back for major revision.
+   - Accepted RFCs move to the implementation phase.
+
+* Implementation
+
+1. Create implementation tasks based on the accepted RFC.
+2. Assign tasks to appropriate team members.
+3. Update the RFC status to "In Progress".
+
+* Closure
+
+1. Once implementation is complete, update the RFC status to "Implemented".
+2. Create a final pull request linking the implemented changes to the RFC.
+
+* RFC Statuses
+
+- Draft: Initial submission, under discussion
+- In Review: Formally under review by the team
+- Accepted: Approved for implementation
+- Rejected: Not accepted for implementation
+- In Progress: Currently being implemented
+- Implemented: Fully implemented and closed
+- Withdrawn: Withdrawn by the author
+
+* Conclusion
+
+This RFC process aims to provide a structured approach to proposing and managing changes within the CodeNexus project. By following this process, we can ensure that all team members have the opportunity to contribute ideas and provide feedback, leading to better-informed decisions and a more collaborative development environment.
+
+* Local Variables                                                  :ARCHIVE:
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# End:

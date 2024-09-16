@@ -1,0 +1,249 @@
+:PROPERTIES:
+:ID:       4EC7E3AE-38B9-4F5D-B782-641CBAB6BE73
+:END:
+#+TITLE: RFC 004: Code Style Inference and PR Review Agent for CodeNexus
+#+AUTHOR: Claude (Code Architect AI)
+#+DATE: [2024-09-13 Fri]
+
+* DRAFT Metadata
+:PROPERTIES:
+:LAST_UPDATED: [2024-09-14 Sat]
+:FILENAME: 004-codenexus-code-style-inference-and-pr-review-agent.org
+:END:
+* Abstract
+
+This RFC proposes a new plugin for CodeNexus that uses LLM analysis to infer code style guides from existing codebases and pull request (PR) processes. The plugin will generate a structured style guide that can be ingested by a code review agent-swarm, enabling automated code reviews for style, semantics, and the application of suggested changes during discussions with the development agent.
+
+* Motivation
+
+Maintaining consistent code style across a project is crucial for readability and maintainability. However, explicitly documenting and enforcing style guides can be time-consuming and often leads to inconsistencies. By leveraging LLM analysis to infer style guides from existing code and PR processes, we can:
+
+1. Automatically generate comprehensive style guides tailored to each project.
+2. Ensure consistency in code reviews by providing a structured format for style rules.
+3. Enable automated code review agents to apply style-related changes during PR discussions.
+4. Reduce the cognitive load on human reviewers by automating style-related feedback.
+
+* Specification
+
+** 1. Code Style Inference Module
+
+*** 1.1 Input
+- Repository URL or local path
+- Access to PR history (if available)
+
+*** 1.2 Processing
+- Analyze code files to identify patterns in:
+  - Naming conventions (variables, functions, classes)
+  - Indentation and whitespace usage
+  - Comment styles and documentation practices
+  - File organization and module structure
+- Analyze PR history to identify:
+  - Commonly requested changes related to style
+  - Accepted vs. rejected style-related modifications
+
+*** 1.3 Output
+- Structured style guide in a machine-readable format (e.g., YAML or JSON)
+
+** 2. Style Guide Formatter
+
+*** 2.1 Input
+- Raw style guide data from the inference module
+
+*** 2.2 Processing
+- Organize style rules into categories (e.g., naming, formatting, documentation)
+- Generate human-readable descriptions for each rule
+- Assign priority levels to rules based on frequency and importance
+
+*** 2.3 Output
+- Formatted style guide in multiple formats:
+  - Machine-readable (YAML/JSON) for agent consumption
+  - Human-readable (Markdown) for developer reference
+
+** 3. PR Review Agent
+
+*** 3.1 Input
+- Inferred style guide
+- Pull request diff
+
+*** 3.2 Processing
+- Analyze PR diff against the style guide rules
+- Identify style violations and improvement opportunities
+- Generate suggested changes with explanations
+
+*** 3.3 Output
+- Code review comments with suggested changes
+- Patch file with automated style fixes (optional)
+
+** 4. Agent-Dev Interaction Module
+
+*** 4.1 Input
+- PR review agent output
+- Developer responses/feedback
+
+*** 4.2 Processing
+- Facilitate discussion between the PR review agent and the developer
+- Apply agreed-upon changes to the code
+- Update the inferred style guide based on accepted/rejected suggestions
+
+*** 4.3 Output
+- Updated PR with applied changes
+- Log of the discussion and decisions made
+
+* Implementation
+
+** Phase 1: Code Style Inference
+#+BEGIN_SRC python
+from typing import Dict, List
+import ast
+import os
+
+def analyze_code_file(file_path: str) -> Dict[str, Any]:
+    with open(file_path, 'r') as file:
+        content = file.read()
+    
+    tree = ast.parse(content)
+    analyzer = CodeStyleAnalyzer()
+    analyzer.visit(tree)
+    
+    return analyzer.get_style_info()
+
+class CodeStyleAnalyzer(ast.NodeVisitor):
+    def __init__(self):
+        self.style_info = {
+            'naming': {},
+            'indentation': {},
+            'docstrings': {},
+        }
+    
+    def visit_FunctionDef(self, node):
+        # Analyze function naming and docstrings
+        self.style_info['naming']['functions'] = self.style_info['naming'].get('functions', []) + [node.name]
+        if ast.get_docstring(node):
+            self.style_info['docstrings']['functions'] = self.style_info['docstrings'].get('functions', 0) + 1
+        self.generic_visit(node)
+
+    # Add more visit methods for other node types
+
+    def get_style_info(self):
+        return self.style_info
+
+def infer_style_guide(repo_path: str) -> Dict[str, Any]:
+    style_guide = {}
+    for root, _, files in os.walk(repo_path):
+        for file in files:
+            if file.endswith('.py'):
+                file_path = os.path.join(root, file)
+                file_style = analyze_code_file(file_path)
+                # Merge file_style into style_guide
+                # ... (implementation details)
+    
+    return style_guide
+
+# Usage
+repo_path = '/path/to/your/repo'
+inferred_style = infer_style_guide(repo_path)
+print(inferred_style)
+#+END_SRC
+
+** Phase 2: PR Review Agent
+#+BEGIN_SRC python
+from typing import List, Dict
+import difflib
+
+def review_pr(style_guide: Dict[str, Any], pr_diff: str) -> List[Dict[str, str]]:
+    reviews = []
+    for line in pr_diff.splitlines():
+        if line.startswith('+'):
+            # Analyze added lines
+            violations = check_style_violations(line, style_guide)
+            if violations:
+                reviews.append({
+                    'line': line,
+                    'violations': violations,
+                    'suggested_fix': generate_fix(line, violations)
+                })
+    return reviews
+
+def check_style_violations(line: str, style_guide: Dict[str, Any]) -> List[str]:
+    violations = []
+    # Check against style guide rules
+    # ... (implementation details)
+    return violations
+
+def generate_fix(line: str, violations: List[str]) -> str:
+    # Generate suggested fix based on violations
+    # ... (implementation details)
+    return fixed_line
+
+# Usage
+style_guide = infer_style_guide('/path/to/repo')
+pr_diff = """
+--- a/file.py
++++ b/file.py
+@@ -1,5 +1,5 @@
+ def hello_world():
+-    print("Hello, World!")
++    print ("Hello, World!")
+"""
+reviews = review_pr(style_guide, pr_diff)
+print(reviews)
+#+END_SRC
+
+* Advantages
+
+1. Automated style guide generation reduces manual effort in maintaining documentation.
+2. Consistent code reviews across different reviewers and projects.
+3. Improved code quality and readability through enforced style guidelines.
+4. Faster PR reviews by automating style-related checks and suggestions.
+5. Adaptive style guides that evolve with the project over time.
+
+* Disadvantages
+
+1. Initial setup and training of the LLM model may require significant computational resources.
+2. False positives in style detection may lead to unnecessary discussions or changes.
+3. Over-reliance on automated style checking may lead to less critical thinking about code structure.
+4. Potential resistance from developers who prefer more flexible coding styles.
+
+* Alternatives Considered
+
+1. Manual creation and maintenance of style guides
+2. Using pre-defined linting rules without project-specific customization
+3. Implementing simpler regex-based style checking without LLM analysis
+
+* Open Questions
+
+1. How to handle conflicting style patterns within the same codebase?
+2. What is the best way to version and track changes in the inferred style guide over time?
+3. How to balance strict style enforcement with allowing for necessary exceptions?
+4. What metrics should be used to evaluate the effectiveness of the inferred style guide?
+
+* Resources Required
+
+1. Access to GPT-4 or a similar advanced language model for code analysis
+2. Computational resources for processing large codebases
+3. Integration with version control systems (e.g., Git) for PR analysis
+4. Development time for implementing and testing the plugin
+
+* Timeline
+
+1. Week 1-2: Implement core code style inference module
+2. Week 3-4: Develop style guide formatter and integration with CodeNexus
+3. Week 5-6: Implement PR review agent and testing with sample repositories
+4. Week 7-8: Develop agent-dev interaction module and conduct user testing
+5. Week 9-10: Refine and optimize based on feedback, prepare documentation
+
+* Success Metrics
+
+1. Reduction in style-related comments in code reviews
+2. Increase in consistency of code style across the project
+3. Decrease in time spent on code reviews
+4. Positive feedback from developers on the usefulness of automated style suggestions
+
+* Conclusion
+
+The proposed Code Style Inference and PR Review Agent plugin for CodeNexus has the potential to significantly improve code quality and consistency while reducing the manual effort required in code reviews. By leveraging LLM analysis to infer and apply project-specific style guides, we can create a more efficient and effective code review process that adapts to the evolving needs of each project.
+
+* Local Variables                                                  :ARCHIVE:
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# End:
