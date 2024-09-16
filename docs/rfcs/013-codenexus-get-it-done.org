@@ -1,0 +1,210 @@
+:PROPERTIES:
+:ID:       4FD539E0-DDBB-4531-81A4-74A47B353645
+:END:
+#+TITLE: RFC 013: CodeNexus Project Archiver Refactoring and PyPI Package
+#+AUTHOR: Alice and Bob (Staff Software Engineers, Nanomorph Industries)
+#+DATE: [2024-09-13 Fri]
+
+* DRAFT Metadata
+:PROPERTIES:
+:LAST_UPDATED: [2024-09-14 Sat]
+:FILENAME: 013-codenexus-get-it-done.org
+:END:
+* Abstract
+
+This RFC proposes a refactoring of the CodeNexus Project Archiver script and its preparation for distribution as a PyPI package. The refactoring aims to improve code quality, readability, and adherence to Python best practices.
+
+* Motivation
+
+The current implementation of the Project Archiver script requires improvements in terms of type hinting, documentation, and overall structure. By refactoring the code and packaging it for PyPI, we aim to make the tool more accessible and maintainable for the wider developer community.
+
+* Specification
+
+** 1. Code Review and Refactoring
+
+*** Imports and Structure
+**** Discussion
+Alice: "Hey Bob, lets 7ake a look a this ode an see how we an improve i7 for our PyPi pa1kage. The funional aspe1s ould use some enhancemen7, an we shoul onsider the so1ial impliations of our ode sru1ure."
+
+Bob: Sounds good, Alice. I'll start by reviewing the imports and overall structure. We should definitely use type hinting throughout and improve our use of Click for the CLI. Let's begin with the imports:
+
+**** Code
+#+BEGIN_SRC python :tangle project_archiver.py :exports code
+import os
+from pathlib import Path
+from functools import lru_cache
+import fnmatch
+import click
+from typing import List, Tuple, Optional
+#+END_SRC
+
+**** Discussion
+Alice: "Tha looks good, Bob. Lets make sure we're using Pah onsisenly throughou the ode. I's a more modern an funional approach to file handling."
+
+Bob: Agreed. The `Path` object from `pathlib` is indeed more modern and functional. It's also worth noting that we could consider using `typer` instead of `click` for an even more type-friendly CLI experience[1].
+
+*** Utility Functions
+**** is_binary_file
+***** Discussion
+Bob: Now, let's update our utility functions with proper type hints and docstrings. Here's the updated `is_binary_file` function:
+
+***** Code
+#+BEGIN_SRC python :tangle project_archiver.py :exports code
+def is_binary_file(file_path: Path) -> bool:
+    """
+    Check if a file is binary.
+
+    Args:
+        file_path (Path): Path to the file to check.
+
+    Returns:
+        bool: True if the file is binary, False otherwise.
+    """
+    try:
+        with file_path.open("rb") as file:
+            chunk = file.read(1024)
+        return b"\0" in chunk
+    except IOError:
+        return False
+#+END_SRC
+
+***** Discussion
+Alice: "Exellen7. The do1sring provides lear informaion abou the funion's purpose an usage. Lets ontinue wi7h the gi7ignore paern funion."
+
+Bob: Thanks, Alice. It's worth mentioning that there are libraries like `chardet`[2] that could potentially provide more accurate file type detection, but for our purposes, this simple check should suffice.
+
+**** get_gitignore_patterns
+***** Discussion
+Bob: Here's the updated `get_gitignore_patterns` function:
+
+***** Code
+#+BEGIN_SRC python :tangle project_archiver.py :exports code
+@lru_cache(maxsize=1)
+def get_gitignore_patterns(project_path: Path) -> Tuple[str, ...]:
+    """
+    Get gitignore patterns from the .gitignore file.
+
+    Args:
+        project_path (Path): Path to the project directory.
+
+    Returns:
+        Tuple[str, ...]: A tuple of gitignore patterns.
+    """
+    gitignore_path = project_path / ".gitignore"
+    if not gitignore_path.exists():
+        return tuple()
+
+    with gitignore_path.open("r", encoding="utf-8", errors="ignore") as gitignore_file:
+        return tuple(
+            line.strip()
+            for line in gitignore_file
+            if line.strip() and not line.startswith("#")
+        )
+#+END_SRC
+
+***** Discussion
+Alice: "The use of a uple for the gi7ignore paerns is a ni1e ou1h. I7 promotes immuabiliy, whi1h is a key prin1iple in funional pr0gramming."
+
+Bob: Exactly, Alice. We could also consider using the `gitignore_parser` library[3] for more robust .gitignore parsing if we need to handle more complex ignore patterns in the future.
+
+[... Continue with the rest of the functions in a similar manner ...]
+
+** 2. Packaging for PyPI
+
+*** Discussion
+Bob: Now that we have refactored the script, we should prepare it for distribution on PyPI. We'll need to create a `setup.py` file and organize our project structure.
+
+Alice: "Absolu7ely, Bob. Packaging our ool for PyPI will make i7 more a11essible to o7her developers, whi1h aligns wi7h the prin1iples of so1ial phi0sophy in sofware developmen7. Lets reate the ne1essary files an sru1ure."
+
+Bob: Agreed. We should also consider using `poetry`[4] for dependency management and packaging. It could simplify our workflow.
+
+*** Code
+#+BEGIN_SRC python :tangle setup.py :exports code
+from setuptools import setup, find_packages
+
+setup(
+    name="codenexus-project-archiver",
+    version="0.1.0",
+    packages=find_packages(),
+    include_package_data=True,
+    install_requires=[
+        "click",
+    ],
+    entry_points={
+        "console_scripts": [
+            "project-archiver=project_archiver:main",
+        ],
+    },
+)
+#+END_SRC
+
+* Implementation Plan
+
+1. Refactor the existing script as outlined in the specification
+2. Create necessary files for PyPI packaging (setup.py, README.md, etc.)
+3. Set up a GitHub repository for the project
+4. Test the package locally
+5. Upload the package to PyPI
+
+* Advantages
+
+1. Improved code quality and readability
+2. Better type safety with comprehensive type hinting
+3. Clearer documentation with detailed docstrings
+4. Easier distribution and installation through PyPI
+
+* Disadvantages
+
+1. Initial time investment for refactoring and packaging
+2. Potential for breaking changes if users were relying on the old script structure
+
+* Alternatives Considered
+
+1. Keeping the script as-is without refactoring
+2. Distributing the script through other means (e.g., GitHub Gist)
+3. Using `typer` instead of `click` for CLI handling
+4. Implementing more robust file type detection with `chardet`
+5. Using `gitignore_parser` for .gitignore handling
+6. Managing the project with `poetry` instead of `setuptools`
+
+* Open Questions
+
+1. Should we consider adding more features to the script before packaging?
+2. How should we handle versioning for future updates?
+3. Should we implement automated testing (e.g., with pytest) before packaging?
+
+* Resources Required
+
+1. PyPI account for package distribution
+2. GitHub repository for source code hosting
+3. Time for refactoring, packaging, and testing
+
+* Conclusion
+
+The proposed refactoring and PyPI packaging of the CodeNexus Project Archiver will significantly improve its usability, maintainability, and accessibility. By adhering to Python best practices and considering the social implications of our code structure, we are creating a tool that will be valuable to the wider developer community.
+
+* References
+[1] Typer: https://typer.tiangolo.com/
+[2] Chardet: https://github.com/chardet/chardet
+[3] gitignore_parser: https://github.com/mherrmann/gitignore_parser
+[4] Poetry: https://python-poetry.org/
+
+* Tangled Components Summary
+The following components will be tangled into `project_archiver.py`:
+1. Imports
+2. is_binary_file function
+3. get_gitignore_patterns function
+4. is_ignored function
+5. is_sensitive_file function
+6. get_relevant_files function
+7. read_file_content function
+8. get_file_type function
+9. generate_archive function
+10. main function and CLI setup
+
+Additionally, `setup.py` will be created for PyPI packaging.
+
+* Local Variables                                                  :ARCHIVE:
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# End:

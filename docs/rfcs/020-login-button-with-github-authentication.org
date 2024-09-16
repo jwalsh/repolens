@@ -19,4 +19,136 @@
 
 This RFC outlines the implementation of a "Login with GitHub" button in RepoLens. The goal is to streamline the user authentication process by leveraging GitHub's OAuth flow. This feature will allow users to authenticate using their GitHub credentials, offering a more secure and user-friendly login experience while aligning RepoLens with best practices in authentication.
 
-[... Rest of the RFC content ...]
+* Motivation
+
+The current authentication process in RepoLens requires users to manually create and manage credentials. This can be a barrier to adoption, especially for developers already using GitHub, and introduces additional security risks related to password management. Implementing a "Login with GitHub" button simplifies user experience, reduces friction, and increases security by delegating authentication to GitHub’s OAuth service.
+
+* Proposal
+
+We propose adding a "Login with GitHub" button to the login page of RepoLens. The button will initiate the GitHub OAuth flow, allowing users to authenticate using their GitHub credentials.
+
+** Key Components:
+1. **Login Button**: A front-end component styled according to RepoLens' UI guidelines, labeled "Login with GitHub."
+2. **GitHub OAuth Integration**: Backend functionality to handle GitHub’s OAuth flow, including obtaining authorization tokens, exchanging tokens for user data, and creating/updating user sessions.
+3. **Session Management**: Upon successful authentication, users will be redirected to RepoLens, and their GitHub credentials will be used to create a session.
+
+** Example Workflow:
+1. User clicks the "Login with GitHub" button.
+2. The app redirects the user to GitHub's authorization page.
+3. After authorization, GitHub redirects the user back to RepoLens with an authorization code.
+4. RepoLens exchanges the code for an access token via GitHub’s OAuth API.
+5. The access token is used to retrieve the user’s profile (e.g., GitHub username).
+6. RepoLens creates a new session or updates an existing one based on the GitHub profile.
+
+* Drawbacks
+
+- **Dependency on GitHub**: If GitHub experiences downtime or API changes, the login functionality could be affected.
+- **Limited Authentication Options**: Users without a GitHub account will still need to use the existing login process.
+- **OAuth Complexity**: Implementing OAuth introduces additional backend complexity, especially with token management and session security.
+
+* Alternatives
+
+- **Continue with the Current System**: The existing login system can be maintained, but this would forgo the user experience and security benefits of GitHub OAuth.
+- **Support Multiple OAuth Providers**: Instead of only GitHub, we could consider implementing OAuth for Google, GitLab, or other platforms, providing more options for users. This would increase complexity but also flexibility.
+
+* Implementation Plan
+
+1. **Front-End Development**:
+   - Add the "Login with GitHub" button to the login page.
+   - Style the button according to RepoLens' UI guidelines.
+
+2. **Back-End Development**:
+   - Implement the GitHub OAuth flow.
+   - Securely handle authorization codes and tokens.
+   - Retrieve and store user data from GitHub (username, email).
+   - Implement session management using GitHub user credentials.
+
+3. **Security Considerations**:
+   - Ensure that tokens are stored securely and never exposed.
+   - Implement expiration and refresh logic for tokens to maintain session security.
+   - Add logging for OAuth events to help monitor and debug issues.
+
+4. **Testing**:
+   - Test the full authentication flow (successful login, error handling).
+   - Test with users who have existing RepoLens accounts and new users.
+
+* Open Questions
+
+- Should we extend this functionality to support other OAuth providers in the future?
+- How should we handle users who wish to switch between GitHub login and the existing credential-based login system?
+
+* Org Babel & Tangle Support
+
+This RFC document contains a basic Org Babel block for testing the OAuth flow setup in Python, allowing developers to tangle this code directly into the project repository.
+
+** Oauth Test 
+
+#+BEGIN_SRC python :tangle test_reposlens_oauth_setup.py
+import os
+import requests
+
+# Retrieve environment variables
+client_id = os.getenv('CLIENT_ID')
+client_secret = os.getenv('CLIENT_SECRET')
+authorize_url = os.getenv('GITHUB_AUTH_URL', 'https://github.com/login/oauth/authorize')
+token_url = os.getenv('GITHUB_TOKEN_URL', 'https://github.com/login/oauth/access_token')
+api_url = os.getenv('GITHUB_API_URL', 'https://api.github.com/user')
+
+# Validate environment variables
+if not client_id or not client_secret:
+    print("Error: CLIENT_ID and CLIENT_SECRET must be set.")
+    exit(1)
+
+# Print values for validation
+print(f"CLIENT_ID: {client_id[:10]}...")  # Show only the first 10 characters
+print(f"CLIENT_SECRET: {client_secret[:10]}...")  # Show only the first 10 characters
+print(f"GITHUB_AUTH_URL: {authorize_url}")
+print(f"GITHUB_TOKEN_URL: {token_url}")
+print(f"GITHUB_API_URL: {api_url}")
+
+def get_github_oauth_token(client_id, client_secret, code):
+    """ Exchange authorization code for GitHub OAuth token """
+    response = requests.post(token_url, data={
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'code': code
+    }, headers={'Accept': 'application/json'})
+    return response.json()
+
+# Example usage for validation (assuming 'code' is provided)
+# print(get_github_oauth_token(client_id, client_secret, 'example_authorization_code'))
+#+END_SRC
+
+#+RESULTS:
+: None
+
+** Configuration
+
+#+begin_src json :tangle config-sample.json
+{
+  "CLIENT_ID": "your_client_id",
+  "CLIENT_SECRET": "your_client_secret",
+  "GITHUB_AUTH_URL": "https://github.com/login/oauth/authorize",
+  "GITHUB_TOKEN_URL": "https://github.com/login/oauth/access_token",
+  "GITHUB_API_URL": "https://api.github.com/user"
+}
+#+end_src
+
+#+begin_src env :tangle .envrc.sample
+export CLIENT_ID="your_client_id"
+export CLIENT_SECRET="your_client_secret"
+export GITHUB_AUTH_URL="https://github.com/login/oauth/authorize"
+export GITHUB_TOKEN_URL="https://github.com/login/oauth/access_token"
+export GITHUB_API_URL="https://api.github.com/user"
+
+#+end_src
+* Conclusion
+
+Implementing GitHub authentication in RepoLens will streamline the user experience and reduce security risks. By integrating with GitHub’s OAuth system, we leverage an industry-standard approach to authentication. This RFC proposes a step-by-step approach to implement the "Login with GitHub" button, ensuring secure and efficient handling of user sessions.
+
+* Local Variables
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# org-babel-tangle: yes
+# End:
+>>>>>>> fa1f5128a111aedc629b94f091211361dfa04a63
