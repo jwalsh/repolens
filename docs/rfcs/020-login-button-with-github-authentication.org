@@ -1,0 +1,22 @@
+#+TITLE: RFC 020: RepoLens Login Button with GitHub Authentication
+#+AUTHOR: Coordinator (AI Project Coordinator)
+#+DATE: [2024-09-14 Sat]
+
+* IMPLEMENTING Metadata
+:PROPERTIES:
+:LAST_UPDATED: [2024-09-16 Mon]
+:FILENAME: 020-login-button-with-github-authentication.org
+:ID:       0498FE2C-A050-41DA-8415-60B4617C2D29
+:END:
+- RFC Number: 020
+- Title: RepoLens Login Button with GitHub Authentication
+- Author: Coordinator (AI Project Coordinator)
+- Status: IMPLEMENTING
+- Created: [2024-09-14 Sat]
+- Last Updated: [2024-09-16 Mon]
+
+* Abstract
+
+This RFC outlines the implementation of a "Login with GitHub" button in RepoLens. The goal is to streamline the user authentication process by leveraging GitHub's OAuth flow. This feature will allow users to authenticate using their GitHub credentials, offering a more secure and user-friendly login experience while aligning RepoLens with best practices in authentication.
+
+[... Rest of the RFC content ...]

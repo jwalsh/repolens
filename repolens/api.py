@@ -11,6 +11,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
+from sqlalchemy.orm import joinedload
 
 api_bp = Blueprint('api', __name__)
 cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
@@ -59,7 +60,7 @@ def get_repository(repo_id):
 @api_bp.route('/analysis/<int:analysis_id>', methods=['GET'])
 def get_analysis(analysis_id):
     with current_app.app_context():
-        analysis = Analysis.query.get(analysis_id)
+        analysis = Analysis.query.options(joinedload(Analysis.repository)).get(analysis_id)
     if not analysis:
         return jsonify({'error': 'Analysis not found'}), 404
 
