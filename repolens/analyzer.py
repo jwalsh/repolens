@@ -1,7 +1,7 @@
 from repolens.models import Repository, Analysis, db
 
 def analyze_repository(repo_id, analysis_type):
-    repository = Repository.query.get(repo_id)
+    repository = db.session.get(Repository, repo_id)
     if not repository:
         return None
 

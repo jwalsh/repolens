@@ -1,12 +1,15 @@
 import unittest
 from repolens.analyzer import analyze_repository
-from repolens.models import Repository, Analysis, db
-from main import app
+from repolens.models import Repository, Analysis
+from repolens.database import db
+from main import create_app
 
 class TestAnalyzer(unittest.TestCase):
     def setUp(self):
-        self.app = app.test_client()
-        self.app_context = app.app_context()
+        # In-memory, so the suite never writes site.db into the working tree.
+        self.flask_app = create_app(SQLALCHEMY_DATABASE_URI='sqlite:///:memory:')
+        self.app = self.flask_app.test_client()
+        self.app_context = self.flask_app.app_context()
         self.app_context.push()
         db.create_all()
 
@@ -35,7 +38,7 @@ class TestAnalyzer(unittest.TestCase):
             analysis_id = analyze_repository(self.test_repo.id, analysis_type)
             self.assertIsNotNone(analysis_id)
 
-            analysis = Analysis.query.get(analysis_id)
+            analysis = db.session.get(Analysis, analysis_id)
             self.assertIsNotNone(analysis)
             self.assertEqual(analysis.repository_id, self.test_repo.id)
             self.assertEqual(analysis.analysis_type, analysis_type)

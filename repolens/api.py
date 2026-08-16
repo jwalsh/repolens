@@ -1,17 +1,15 @@
+import io
+import json
+from urllib.parse import urlparse
+
 from flask import Blueprint, jsonify, request, current_app, send_file
+from flask_caching import Cache
+from sqlalchemy.orm import joinedload
+
 from repolens.packager import package_repository
 from repolens.analyzer import analyze_repository
 from repolens.models import Repository, Analysis
 from repolens.database import db
-from flask_caching import Cache
-import tempfile
-import json
-import os
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
-from sqlalchemy.orm import joinedload
 
 api_bp = Blueprint('api', __name__)
 cache = Cache(config={'CACHE_TYPE': 'SimpleCache'})
@@ -27,7 +25,7 @@ def package():
     if error:
         return jsonify({'error': error}), 500
     
-    repository = Repository.query.get(repo_id)
+    repository = db.session.get(Repository, repo_id)
     return jsonify({'repo_id': repo_id, 'repo_name': repository.name}), 201
 
 @api_bp.route('/analyze', methods=['POST'])
@@ -46,7 +44,7 @@ def analyze():
 @api_bp.route('/repository/<int:repo_id>', methods=['GET'])
 def get_repository(repo_id):
     with current_app.app_context():
-        repository = Repository.query.get(repo_id)
+        repository = db.session.get(Repository, repo_id)
     if not repository:
         return jsonify({'error': 'Repository not found'}), 404
 
@@ -60,7 +58,10 @@ def get_repository(repo_id):
 @api_bp.route('/analysis/<int:analysis_id>', methods=['GET'])
 def get_analysis(analysis_id):
     with current_app.app_context():
-        analysis = Analysis.query.options(joinedload(Analysis.repository)).get(analysis_id)
+        analysis = db.session.get(
+            Analysis, analysis_id,
+            options=[joinedload(Analysis.repository)],
+        )
     if not analysis:
         return jsonify({'error': 'Analysis not found'}), 404
 
@@ -91,16 +92,21 @@ def get_repolens_repository():
 @cache.cached(timeout=300)  # Cache for 5 minutes
 def download_repository_content(repo_id):
     with current_app.app_context():
-        repository = Repository.query.get(repo_id)
+        repository = db.session.get(Repository, repo_id)
     if not repository:
         return jsonify({'error': 'Repository not found'}), 404
 
-    # Create a temporary file to store the repository content
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
-        json.dump(repository.packaged_data, temp_file, indent=2)
+    # Serve from memory. The previous implementation wrote a NamedTemporaryFile
+    # with delete=False and never unlinked it, so every download leaked a file
+    # for the lifetime of the host.
+    payload = json.dumps(repository.packaged_data, indent=2).encode('utf-8')
 
-    # Send the file as an attachment
-    return send_file(temp_file.name, as_attachment=True, download_name=f"{repository.name}_content.txt")
+    return send_file(
+        io.BytesIO(payload),
+        mimetype='text/plain',
+        as_attachment=True,
+        download_name=f"{repository.name}_content.txt",
+    )
 
 @api_bp.route('/screenshot', methods=['POST'])
 def take_screenshot():
@@ -109,33 +115,46 @@ def take_screenshot():
         return jsonify({'error': 'Missing url'}), 400
 
     url = data['url']
-    
-    # Set up Chrome options
+
+    # Partial guard only. This blocks file:// and similar local schemes, which
+    # otherwise let an unauthenticated caller read the host filesystem through
+    # the browser. It does NOT stop SSRF against internal HTTP services --
+    # that needs authentication plus address-range filtering. See the
+    # provenance-lens addendum, security section.
+    if urlparse(url).scheme not in ('http', 'https'):
+        return jsonify({'error': 'Only http and https URLs are supported'}), 400
+
+    # Imported lazily: selenium and webdriver-manager are needed by this one
+    # endpoint, and a top-level import took the whole application down when
+    # they were absent.
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
 
-    # Set up the Chrome WebDriver
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
-        # Navigate to the URL and take a screenshot
         driver.get(url)
         screenshot = driver.get_screenshot_as_png()
-
-        # Save the screenshot to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
-            temp_file.write(screenshot)
-            temp_file_path = temp_file.name
-
-        # Send the file as an attachment
-        return send_file(temp_file_path, mimetype='image/png', as_attachment=True, download_name='screenshot.png')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         driver.quit()
+
+    # Served from memory; the temp file this used to write was never unlinked.
+    return send_file(
+        io.BytesIO(screenshot),
+        mimetype='image/png',
+        as_attachment=True,
+        download_name='screenshot.png',
+    )
 
 def init_app(app):
     cache.init_app(app)

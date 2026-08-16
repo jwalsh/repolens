@@ -2,12 +2,14 @@
 
 ## Commands
 - Run all tests: `python -m unittest discover`
-- Run single test: `python -m unittest tests/test_file.py`
+- Run single test: `python -m unittest tests.test_analyzer` (module path, not a file path)
 - Run app: `python main.py`
-- Install dependencies: `pip install -e .` or `python -m pip install -r requirements.txt`
+- Install dependencies: `python -m pip install -r requirements.txt`
 - Install with Poetry: `poetry install`
-- Run with development server: `python main.py`
-- Create database tables: `python -c "from main import app; from repolens.database import db; with app.app_context(): db.create_all()"`
+- Create database tables: `python -c "import main; from repolens.database import db; main.app.app_context().push(); db.create_all()"`
+
+`tests/__init__.py` must exist or `unittest discover` silently collects zero
+tests and reports OK.
 
 ## Code Style Guidelines
 - **Imports**: Group standard library, third-party, and local imports
@@ -28,4 +30,7 @@
 - Static assets in `static/` directory
 
 ## Environment Setup
-- DATABASE_URL: PostgreSQL connection string required for database operations
+- DATABASE_URL: PostgreSQL connection string. Optional in development —
+  `config.Config` falls back to `sqlite:///site.db` when it is unset.
+- SECRET_KEY: optional; a random per-process key is generated when unset,
+  which invalidates any session state across restarts.

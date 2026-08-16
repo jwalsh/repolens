@@ -1,9 +1,6 @@
-from flask_sqlalchemy import SQLAlchemy
+"""RepoLens package.
 
-db = SQLAlchemy()
-
-def init_app(app):
-    db.init_app(app)
-    
-    with app.app_context():
-        db.create_all()
+Deliberately empty of state. The single SQLAlchemy instance lives in
+``repolens.database``; importing it from anywhere else creates a second
+registry whose models are invisible to ``db.create_all()``.
+"""

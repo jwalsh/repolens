@@ -1,14 +1,20 @@
 from flask import Flask, render_template
+
+from config import Config
 from repolens.api import api_bp, init_app as init_api
 from repolens.database import db
-import os
 
-def create_app():
+
+def create_app(config_object: type = Config, **overrides: object) -> Flask:
+    """Build the application.
+
+    ``overrides`` lets tests inject a database URI without setting process
+    environment variables.
+    """
     app = Flask(__name__)
 
-    # Database configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config.from_object(config_object)
+    app.config.update(overrides)
 
     # Initialize SQLAlchemy with the app
     db.init_app(app)
@@ -24,6 +30,7 @@ def create_app():
         return render_template('index.html')
 
     return app
+
 
 app = create_app()
 

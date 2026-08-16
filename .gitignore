@@ -173,3 +173,7 @@ bedrock_config.json
 .env
 .envrc
 
+
+# RepoLens local state
+instance/
+site.db

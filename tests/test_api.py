@@ -10,12 +10,15 @@ class TestGetAnalysis(unittest.TestCase):
         self.app = Flask(__name__)
         self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        self.app.register_blueprint(api_bp)
+        # url_prefix must match main.create_app, or every request below 404s
+        # and the assertions pass for the wrong reason.
+        self.app.register_blueprint(api_bp, url_prefix='/api')
+        db.init_app(self.app)
         init_app(self.app)
-        
+
         with self.app.app_context():
             db.create_all()
-            
+
         self.client = self.app.test_client()
 
     def tearDown(self):

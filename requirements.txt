@@ -1,0 +1,15 @@
+# Direct dependencies. Mirrors [tool.poetry.dependencies] in pyproject.toml.
+# This file was empty, so the README's documented install path installed
+# nothing and left the app unimportable.
+Flask==3.1.3
+Flask-SQLAlchemy==3.1.1
+Flask-Caching==2.4.1
+SQLAlchemy==2.0.52
+GitPython==3.1.59
+requests==2.34.2
+psycopg2-binary==2.9.12
+
+# Optional: required only by POST /api/screenshot, imported lazily so the
+# rest of the application runs without them.
+selenium==4.47.0
+webdriver-manager==4.1.2
