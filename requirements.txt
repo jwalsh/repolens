@@ -9,12 +9,9 @@ alembic==1.19.1
 requests==2.34.2
 psycopg2-binary==2.9.12
 
-# GitPython is no longer used by any live code: repolens/clones.py and
-# repolens/packager.py invoke git directly, which they must in order to reach
-# --mirror, ls-tree -z, and blame --line-porcelain. The only remaining import
-# is in utils/converter.py, which nothing imports. Drop this line when
-# utils/ goes.
-GitPython==3.1.59
+# No GitPython. repolens/clones.py and repolens/packager.py invoke git
+# directly, which they must in order to reach --mirror, ls-tree -z, and
+# blame --line-porcelain. It went with utils/, its only importer.
 
 # Optional: required only by POST /api/screenshot, imported lazily so the
 # rest of the application runs without them.

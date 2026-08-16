@@ -7,17 +7,21 @@ This guide covers everything you need to know to contribute to and develop the R
 ```
 repolens/
 ├── repolens/            # Core application code
-│   ├── __init__.py
+│   ├── __init__.py      # Package marker only -- no db instance lives here
 │   ├── analyzer.py      # Repository analysis logic
 │   ├── api.py           # API endpoints
-│   ├── database.py      # Database models and connection
+│   ├── clones.py        # Persistent bare-mirror clone store
+│   ├── database.py      # The single SQLAlchemy instance
+│   ├── forge.py         # GitHub PR bodies and review threads
+│   ├── jobs.py          # Checkpointed, resumable job runner
 │   ├── models.py        # Data models
-│   ├── packager.py      # Repository data packaging
-│   └── utils.py         # Utility functions
+│   └── packager.py      # Repository data packaging
+├── migrations/          # Alembic revisions
+├── experiments/         # Registered conjectures, gates, dated logs
 ├── static/              # Static assets (CSS, JS)
 ├── templates/           # HTML templates
 ├── tests/               # Test suite
-├── docs/                # Documentation
+├── docs/                # Documentation and RFCs
 └── scripts/             # Utility scripts
 ```
 
@@ -116,4 +120,8 @@ Keep documentation up-to-date when making changes:
 
 - [Flask Documentation](https://flask.palletsprojects.com/)
 - [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
-- [GitPython Documentation](https://gitpython.readthedocs.io/)
+- [Alembic Documentation](https://alembic.sqlalchemy.org/)
+- [Hypothesis Documentation](https://hypothesis.readthedocs.io/)
+- [git plumbing](https://git-scm.com/docs) — RepoLens invokes git directly
+  rather than through a binding, because `--mirror`, `ls-tree -z` and
+  `blame --line-porcelain` are what the provenance lens needs.
