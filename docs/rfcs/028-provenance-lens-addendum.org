@@ -289,14 +289,16 @@ outside the lens: the clone store fixes the synchronous-clone timeout in
 
 *** Revised phasing
 
-| milestone | content                              | model calls | gate     | status          |
-|-----------+--------------------------------------+-------------+----------+-----------------|
-| M-1       | clone store, runner, migrations      | no          | none     | landed, see §26 |
-| M0        | fact tier, co-change, authority      | no          | none     | next            |
-| M1        | trailers, anchors, constraint index  | no          | trailer% |                 |
-| —         | R1 study (needs M-1 + forge)         | yes         | —        | blocked on §21  |
-| M2        | claim tier, dossier, MCP export      | yes         | R1       |                 |
-| M3        | milestone reconstruction             | yes         | M2 yield |                 |
+| milestone | content                              | model calls | gate     | status           |
+|-----------+--------------------------------------+-------------+----------+------------------|
+| M-1       | clone store, runner, migrations      | no          | none     | landed, see §26  |
+| —         | forge client (§21 option 1)          | no          | none     | landed, see §27  |
+| M0        | fact tier, co-change, authority      | no          | none     | next             |
+| —         | ignore/generated resolver            | no          | none     | deferred, see §28 |
+| M1        | trailers, anchors, constraint index  | no          | trailer% |                  |
+| —         | R1 study                             | yes         | —        | needs M2 extract |
+| M2        | claim tier, dossier, MCP export      | yes         | R1       |                  |
+| M3        | milestone reconstruction             | yes         | M2 yield |                  |
 
 The R1 study moves from "before M2" to "after M1", which is a real schedule
 change: the decision to build the claim tier now arrives two milestones in
@@ -519,6 +521,127 @@ unauthenticated ~POST /api/package~ that now writes to durable disk instead of
 ~/tmp~ — which sharpens §23 rather than resolving it. Authentication is the
 prerequisite; a quota is the follow-up.
 
-No forge client. §21's option 1 remains open and R1 remains unmeasurable until
-it is chosen.
+* 27. Forge client — §21 option 1, taken
+
+Landed 2026-08-16, after M-1 and ahead of M0. §21 offered two ways out of R1's
+miscalibration; this takes the first. R1 will be measured on commit bodies
+*and* PR text, against the 4% threshold as written, rather than on half the
+corpus against a threshold calibrated for all of it.
+
+** Bulk endpoints are the whole design
+
+The obvious implementation resolves each merge commit to a pull request and
+fetches that pull request. It costs one request per PR and puts a
+20-repository corpus far outside an hour of quota, which would make the R1
+study an event you run once rather than an instrument you re-run after
+changing a threshold.
+
+GitHub's list endpoints return full bodies 100 at a time, and review comments
+have a *repo-wide* endpoint that never needs a PR number at all. Measured
+against the live API:
+
+#+begin_src markdown
+chalk/chalk   210 pull requests + 369 review comments   →   7 requests
+              naive per-PR equivalent                   →   210+ requests
+#+end_src
+
+Extrapolating by page count rather than by repository — a repo with 19k pull
+requests is ~190 pages, not one unit — the 20-repo corpus should land in the
+low thousands of requests against an authenticated budget of 5000/hour. The
+study fits in one quota window. That was not obvious before it was measured
+and it is the reason §21 option 1 is affordable at all.
+
+Unauthenticated access is 60 requests/hour. ~scripts/fetch_forge_text.py~
+refuses to start without a token rather than discovering this 60 requests in.
+
+** An early signal on R1, with its caveat attached
+
+Of chalk's 210 pull requests, *66% carry a body of 80 characters or more* —
+the threshold §6's ~should_call~ gate uses. §10 assumes 32% of *commits* clear
+that gate. Review comments run 49%.
+
+This is consistent with §14.3's "yield roughly doubles when PR bodies are
+available", and it is *not* a measurement of claim yield. Clearing a length
+gate means a commit reaches the model; R1 counts commits that produce a
+grounded claim surviving the substring gate. This figure is an upper bound on
+the input, not an estimate of the output, and one small JavaScript library is
+not a corpus. It says the R1 study will have something to measure. It does not
+say what the measurement will be.
+
+** Conservative PR resolution
+
+~pr_number_from_commit~ accepts exactly three forms, all written by the forge
+itself: ~Merge pull request #N from~, a subject ending ~(#N)~, and GitLab's
+~See merge request …!N~. A bare ~#123~ is refused.
+
+That refusal is load-bearing. ~Fixes #123~ references an *issue*, and under I1
+attaching an issue's prose to a commit produces an evidence span pointing at
+text the author never wrote about this change — a claim that is well-formed,
+citable, and wrong. The property test generates issue-reference forms and
+asserts none is ever read as a pull request; adding a bare ~#(\d+)~ fallback
+fails it immediately.
+
+~Revert "Fix the parser (#456)"~ returns None by the same logic. The revert is
+its own change with its own pull request.
+
+** A bug the integration surfaced: JobAbort
+
+~RateLimited~ subclasses ~Exception~, so the runner would have caught it
+per-item and marched through the remaining nineteen repositories marking every
+one failed — burning the resume path that exists for exactly this case.
+
+Fixed in the runner rather than at the call site, because the distinction is
+the runner's to define: ~repolens.jobs.JobAbort~ is a ~BaseException~ meaning
+*stop now, keep the checkpoints*. Per-item errors are ~Exception~; conditions
+that will also fail the next item — exhausted quota, full disk, revoked token
+— are ~JobAbort~. The forge script raises it on rate limit, reports when the
+quota resets, and exits 2.
+
+This is the second time the M-1 contract earned its keep by being written down
+precisely rather than approximately. The first was the at-least-once /
+exactly-once distinction.
+
+** What is still missing for R1
+
+The study itself. The forge client materializes the prose; measuring yield
+needs the extraction pass and its grounding gate, which is M2 work being
+pulled forward as an instrument. Concretely: ~experiments/002-claim-yield/~
+does not exist yet, and until it does, R1 remains registered and unmeasured in
+exactly the way C1 is.
+
+Text only, no diffs — I2 applies to what is stored as much as to what is
+prompted. A file of hunks sitting beside the prose is an invitation.
+
+* 28. Deferred: the ignore and generated-file resolver
+
+Raised, scoped, not built. The spec's §5 uses an inline ~GENERATED~ regex to
+drop vendored and generated paths before counting co-change, and that regex is
+doing more work than it can carry. Notes for when it is picked up:
+
+*~.gitignore~ is the wrong instrument.* A tracked file is by definition one
+that was not ignored, so ~.gitignore~ says almost nothing about the files
+co-change actually counts. It catches only force-added artifacts. The real
+signal is ~.gitattributes~ — ~linguist-generated~ and ~linguist-vendored~ mark
+*tracked* files as machine-authored — plus path heuristics for the repositories
+that never adopted the attribute.
+
+*Ignore rules are versioned.* At commit C the ~.gitattributes~ was different
+from HEAD's. Filtering a ten-year co-change window through today's rules is an
+anachronism, and it interacts with I3: a fact tier that is a pure function of
+the clone must decide whether "the clone" means HEAD or the history. Cheap
+answer: resolve attributes at each commit via ~git check-attr~ against that
+revision. Correct, and one process per commit, so it wants measuring before
+committing to it.
+
+*Composition.* A full resolver has to merge ~.gitattributes~, ~.gitignore~,
+~.git/info/exclude~, ~core.excludesFile~, and the ~.ignore~/~.rgignore~ family
+that ripgrep and fd read. ~pathspec~ is the canonical Python implementation of
+gitignore matching and is what black and pre-commit use; there is no reason to
+hand-roll the glob semantics.
+
+*R2 is what this is for.* R2 refutes co-change if maintainers judge top-lift
+neighbours unrelated more often than related. A weak exclusion filter is the
+most likely way to fail R2 for a reason that has nothing to do with whether
+co-change measures coupling — so the resolver should land before the R2 study,
+not after it.
 

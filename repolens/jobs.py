@@ -46,6 +46,26 @@ CREATE INDEX IF NOT EXISTS ix_checkpoint_job_state ON checkpoint (job_id, state)
 """
 
 
+class JobAbort(BaseException):
+    """Stop the run now; keep every checkpoint written so far.
+
+    ``BaseException``, not ``Exception``, and that is the entire point. The
+    runner records a failing item and carries on, which is right for an error
+    that is specific to one item and wrong for a condition that will fail the
+    next item too -- an exhausted API quota, a full disk, a revoked token.
+    Left as a plain ``Exception``, one rate limit marches through the corpus
+    marking everything failed and burns the resume path it should have used.
+
+    Raise this from a work function to convert "this item failed" into "come
+    back later".
+    """
+
+    def __init__(self, reason: str, cause: BaseException | None = None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.cause = cause
+
+
 @dataclass(frozen=True)
 class JobResult:
     """Outcome of one ``run_job`` call. Doubles as a measurement record."""
@@ -147,9 +167,11 @@ def run_job(
     """Run ``work`` over ``items``, skipping anything already checkpointed.
 
     ``work`` raising ``Exception`` marks that item failed and the run
-    continues. ``BaseException`` -- KeyboardInterrupt, SystemExit, a process
-    signal -- propagates and aborts the run, which is what makes the resume
-    path the normal path rather than an error path.
+    continues. ``BaseException`` -- ``JobAbort``, KeyboardInterrupt,
+    SystemExit, a process signal -- propagates and aborts the run, which is
+    what makes the resume path the normal path rather than an error path.
+
+    Raise ``JobAbort`` for conditions that will also fail the next item.
     """
     started = time.monotonic()
     already_done = store.completed(job_id)

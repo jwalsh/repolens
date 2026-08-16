@@ -236,6 +236,45 @@ class TestFailureHandling(unittest.TestCase):
         self.assertEqual(attempts['a'], 3)
         self.assertFalse(result.is_complete)
 
+    def test_job_abort_stops_the_run_and_keeps_checkpoints(self):
+        # The motivating case: an exhausted API quota fails the current item
+        # and every item after it. Recording 20 failures and calling the run
+        # complete would burn the resume path this exists to protect.
+        from repolens.jobs import JobAbort
+
+        seen: list[str] = []
+
+        def work(item_id: str) -> None:
+            seen.append(item_id)
+            if item_id == 'b':
+                raise JobAbort('rate limited')
+
+        with self.assertRaises(JobAbort):
+            run_job('job', ['a', 'b', 'c'], work, self.store)
+
+        self.assertEqual(seen, ['a', 'b'])          # stopped, did not continue
+        self.assertEqual(self.store.completed('job'), {'a'})
+        self.assertEqual(self.store.failures('job'), {})  # b is not "failed"
+
+        # And the resume picks up exactly what is left.
+        def succeed(item_id: str) -> None:
+            seen.append(item_id)
+
+        result = run_job('job', ['a', 'b', 'c'], succeed, self.store)
+
+        self.assertEqual(seen, ['a', 'b', 'b', 'c'])
+        self.assertTrue(result.is_complete)
+
+    def test_ordinary_exceptions_still_only_fail_their_item(self):
+        def work(item_id: str) -> None:
+            if item_id == 'b':
+                raise ValueError('just this one')
+
+        result = run_job('job', ['a', 'b', 'c'], work, self.store)
+
+        self.assertEqual(self.store.completed('job'), {'a', 'c'})
+        self.assertIn('b', result.failed)
+
     def test_reset_clears_the_job(self):
         run_job('job', ['a'], lambda item: None, self.store)
         self.assertEqual(self.store.completed('job'), {'a'})

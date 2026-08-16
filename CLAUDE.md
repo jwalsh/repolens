@@ -12,6 +12,7 @@
 - Stamp an existing database at the baseline: `alembic stamp e2cefdd6030c`
 - New migration after a model change: `alembic revision --autogenerate -m "..."`
 - Run the substrate experiment: `python experiments/001-substrate/run.py --limit 3`
+- Fetch forge prose: `GITHUB_TOKEN=$(gh auth token) python scripts/fetch_forge_text.py --limit 2`
 
 `tests/__init__.py` must exist or `unittest discover` silently collects zero
 tests and reports OK.
@@ -42,6 +43,11 @@ tests and reports OK.
   working trees: blame against an explicit revision works in a bare repo.
 - `repolens/jobs.py` — checkpointed runner. At-least-once execution,
   exactly-once completion; safe because the work is idempotent (spec I4).
+  Raise `JobAbort` (a `BaseException`) for conditions that will also fail the
+  next item — quota, disk, credentials. A plain `Exception` fails one item.
+- `repolens/forge.py` — GitHub PR bodies and review threads, bulk-paginated.
+  `pr_number_from_commit` refuses bare `#123`: that's an issue reference, and
+  a wrong PR association is a well-formed citation pointing at the wrong prose.
 - Property tests, not example tests, guard both. Repository URLs are
   attacker-controlled and interruption schedules are unbounded, so
   `tests/test_clones.py` and `tests/test_jobs.py` generate their inputs.
@@ -55,3 +61,5 @@ tests and reports OK.
   which invalidates any session state across restarts.
 - REPOLENS_CLONE_ROOT: where bare mirrors live (default `.clones`). These
   persist by design and grow without bound until an eviction policy exists.
+- GITHUB_TOKEN: required by the forge client. Unauthenticated GitHub is 60
+  requests/hour, which will not materialize one repository.

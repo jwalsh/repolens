@@ -181,3 +181,4 @@ site.db
 # experiments/**/log.jsonl is deliberately NOT ignored: the dated log is the
 # evidence trail for the conjecture, and evidence that lives only on one
 # machine is not evidence.
+.forge/
