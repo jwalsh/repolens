@@ -289,14 +289,14 @@ outside the lens: the clone store fixes the synchronous-clone timeout in
 
 *** Revised phasing
 
-| milestone | content                              | model calls | gate     |
-|-----------+--------------------------------------+-------------+----------|
-| M-1       | clone store, runner, migrations      | no          | none     |
-| M0        | fact tier, co-change, authority      | no          | none     |
-| M1        | trailers, anchors, constraint index  | no          | trailer% |
-| —         | R1 study (needs M-1 + forge)         | yes         | —        |
-| M2        | claim tier, dossier, MCP export      | yes         | R1       |
-| M3        | milestone reconstruction             | yes         | M2 yield |
+| milestone | content                              | model calls | gate     | status          |
+|-----------+--------------------------------------+-------------+----------+-----------------|
+| M-1       | clone store, runner, migrations      | no          | none     | landed, see §26 |
+| M0        | fact tier, co-change, authority      | no          | none     | next            |
+| M1        | trailers, anchors, constraint index  | no          | trailer% |                 |
+| —         | R1 study (needs M-1 + forge)         | yes         | —        | blocked on §21  |
+| M2        | claim tier, dossier, MCP export      | yes         | R1       |                 |
+| M3        | milestone reconstruction             | yes         | M2 yield |                 |
 
 The R1 study moves from "before M2" to "after M1", which is a real schedule
 change: the decision to build the claim tier now arrives two milestones in
@@ -409,3 +409,116 @@ clones into ~/tmp~, throws the clone away, and stores commit subjects in a JSON
 column. The lens is still the right thing to build. It starts a milestone
 earlier than planned, and the decision point that governs its largest phase
 arrives two milestones later.
+* 26. M-1, as built
+
+Landed 2026-08-16. Everything below is in the tree and under test; §22
+described the plan, this describes what it turned into.
+
+** Clone store — ~repolens/clones.py~
+
+Bare mirrors, not working trees. The lens reads history and runs blame against
+an explicit revision, and both work in a bare repository, so a checkout is
+pure cost. Verified before the module was written rather than assumed:
+~git --git-dir=mirror.git blame --line-porcelain HEAD -- path~ and
+~log --name-status~ both work against a ~--mirror~ clone.
+
+~path_for~ is a pure function of the URL — slug for legibility, 128-bit
+digest for injectivity — and its containment within the store root is a
+property test over generated hostile input, not a review note. Repository URLs
+arrive from an unauthenticated endpoint (§23); "does any string escape the
+root" is a question about the whole input space.
+
+~ext::~ transport is rejected outright: it executes a command out of the URL.
+
+** Job runner — ~repolens/jobs.py~
+
+SQLite checkpoints, no Flask dependency, because a backfill has to run from
+cron and from a test, neither of which has an application context.
+
+The delivery semantic is stated precisely in the module docstring because the
+convenient version is a lie: *at-least-once execution, exactly-once
+completion*. An item interrupted mid-flight was never checkpointed and runs
+again. That is safe here for a reason rather than by luck — I4 makes claim
+extraction a pure function of ~(sha, prompt_version, model_id)~, so
+re-execution is idempotent by construction — and the docstring says so, since
+a future work function that lacks that property would break silently.
+
+** Where the hypotheses actually live
+
+Two senses, both wired in.
+
+*Property-based tests.* ~tests/test_jobs.py~ generates interruption schedules
+and asserts the runner's contract across all of them: every item completed
+exactly once, every item executed at least once, and re-executions bounded by
+the number of interrupted runs. That last bound is what gives the test teeth —
+mutating ~run_job~ to stop skipping completed items fails it immediately, on a
+one-item corpus. ~tests/test_clones.py~ does the same for path containment.
+
+*A registered conjecture with an executable gate.* ~experiments/001-substrate/~
+holds C1 (the substrate can carry the R1 study), four predictions, and a gate
+whose thresholds are module constants in ~run.py~ rather than prose, so the
+description cannot drift from what is enforced. Exit status is the verdict;
+~log.jsonl~ is append-only and committed.
+
+P1.4 — interruption costs at most one re-execution — is deliberately *not*
+measured by ~run.py~. It is a property over every schedule, not a number from
+one run, and the Hypothesis suite already establishes it. Measuring it once
+with a stopwatch would be weaker evidence wearing stronger clothes.
+
+Status: instrument verified against real remotes (2-repo smoke, 2,499 commits,
+9.9 MiB, 13.3 s cold / 0.5 s warm). *The 20-repo corpus run has not been
+executed.* C1 is registered, instrumented, and untested, and the log says so.
+
+** Migrations — ~alembic.ini~, ~migrations/~
+
+Baseline revision ~e2cefdd6030c~ captures ~repository~ and ~analysis~ as
+~db.create_all()~ left them. Existing deployments stamp; fresh ones upgrade.
+
+The load-bearing piece is ~test_models_and_migrations_do_not_drift~, which
+runs alembic's autogenerate comparison against the live metadata and fails
+naming the offending column. Under ~create_all()~ a model change and a
+deployed database could disagree indefinitely with no signal at all.
+
+The baseline also confirms §19.2 empirically: the generated DDL says
+~ForeignKeyConstraint(['repository_id'], ['repository.id'])~. Not ~repo~.
+
+** Packager rewired — and a bug that fell out
+
+~package_repository~ now goes through the clone store, so a second call
+fetches instead of re-cloning. Two behaviour changes came with it, both fixes:
+
+*File listing moved from ~os.walk~ to ~git ls-tree~.* The walk had no
+exclusion for ~.git~, so every sample hook, pack index and ref file counted as
+a repository file. ~file_count~ was inflated by git internals and
+~file_types~ was full of ~sample~ and ~idx~. A bare mirror has no working tree
+to walk, which forced the correct implementation — the kind of bug that a
+design decision fixes by making the wrong thing impossible rather than by
+anyone noticing it.
+
+*The embedded commit list is capped* at 500, with the exact total in a new
+~commit_count~ field from ~git rev-list --count~. Unbounded materialisation
+into one JSON column is what made packaging a request-cycle timeout at the
+50k commits §10 budgets for. ~analyzer.commit_count~ reads the exact field and
+falls back to the list length for rows packaged before it existed, so
+truncating the sample does not truncate the answer.
+
+** Dependency note
+
+GitPython is no longer used by any live code — the clone store and packager
+invoke git directly, which they must to reach ~--mirror~, ~ls-tree -z~, and
+~blame --line-porcelain~. Its only remaining importer is
+~utils/converter.py~, which nothing imports. The dependency and that directory
+should go together; §24 left ~utils/~ alone as a scope call and this does not
+change that, it only adds a second reason.
+
+** What M-1 did not do
+
+No eviction policy. Mirrors accumulate under ~REPOLENS_CLONE_ROOT~ and nothing
+removes them. Fine for the R1 study corpus, not fine for an
+unauthenticated ~POST /api/package~ that now writes to durable disk instead of
+~/tmp~ — which sharpens §23 rather than resolving it. Authentication is the
+prerequisite; a quota is the follow-up.
+
+No forge client. §21's option 1 remains open and R1 remains unmeasurable until
+it is chosen.
+

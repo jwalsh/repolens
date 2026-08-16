@@ -5,8 +5,13 @@
 - Run single test: `python -m unittest tests.test_analyzer` (module path, not a file path)
 - Run app: `python main.py`
 - Install dependencies: `python -m pip install -r requirements.txt`
+- Install dev/test dependencies: `python -m pip install -r requirements-dev.txt`
 - Install with Poetry: `poetry install`
-- Create database tables: `python -c "import main; from repolens.database import db; main.app.app_context().push(); db.create_all()"`
+- Apply migrations: `alembic upgrade head` (not `db.create_all()` — it cannot
+  alter an existing table)
+- Stamp an existing database at the baseline: `alembic stamp e2cefdd6030c`
+- New migration after a model change: `alembic revision --autogenerate -m "..."`
+- Run the substrate experiment: `python experiments/001-substrate/run.py --limit 3`
 
 `tests/__init__.py` must exist or `unittest discover` silently collects zero
 tests and reports OK.
@@ -28,9 +33,25 @@ tests and reports OK.
 - Tests in `tests/` directory
 - Flask templates in `templates/`
 - Static assets in `static/` directory
+- Schema migrations in `migrations/` (alembic)
+- Local evidence in `experiments/NNN-slug/` — conjecture, calibrated gate,
+  dated `log.jsonl`. The log is committed; it is the evidence trail.
+
+## Substrate (RFC 028, M-1)
+- `repolens/clones.py` — persistent bare-mirror clone store. Mirrors, not
+  working trees: blame against an explicit revision works in a bare repo.
+- `repolens/jobs.py` — checkpointed runner. At-least-once execution,
+  exactly-once completion; safe because the work is idempotent (spec I4).
+- Property tests, not example tests, guard both. Repository URLs are
+  attacker-controlled and interruption schedules are unbounded, so
+  `tests/test_clones.py` and `tests/test_jobs.py` generate their inputs.
+- `tests/test_migrations.py::test_models_and_migrations_do_not_drift` fails
+  the build if a model changes without a migration.
 
 ## Environment Setup
 - DATABASE_URL: PostgreSQL connection string. Optional in development —
   `config.Config` falls back to `sqlite:///site.db` when it is unset.
 - SECRET_KEY: optional; a random per-process key is generated when unset,
   which invalidates any session state across restarts.
+- REPOLENS_CLONE_ROOT: where bare mirrors live (default `.clones`). These
+  persist by design and grow without bound until an eviction policy exists.

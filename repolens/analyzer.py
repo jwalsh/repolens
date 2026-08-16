@@ -10,7 +10,12 @@ def analyze_repository(repo_id, analysis_type):
     if analysis_type == 'file_count':
         result['total_files'] = len(repository.packaged_data['files'])
     elif analysis_type == 'commit_count':
-        result['total_commits'] = len(repository.packaged_data['commits'])
+        # `commit_count` is the exact total from `git rev-list --count`; the
+        # embedded `commits` list is a bounded sample (see packager.py). Fall
+        # back to the list length for rows packaged before that field existed.
+        result['total_commits'] = repository.packaged_data.get(
+            'commit_count', len(repository.packaged_data['commits'])
+        )
     elif analysis_type == 'branch_count':
         result['total_branches'] = len(repository.packaged_data['branches'])
     elif analysis_type == 'file_types':

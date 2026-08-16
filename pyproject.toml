@@ -1,20 +1,25 @@
 [tool.poetry]
-name = "repl-nix-attachmentanalyzer-1"
+name = "repolens"
 version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+description = "Package, present, and analyze project repositories."
+authors = ["Jason Walsh <jasonwalsh@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
 flask = "^3.0.3"
 flask-sqlalchemy = "^3.1.1"
-gitpython = "^3.1.43"
+alembic = "^1.19.1"
+gitpython = "^3.1.43"  # dead code only; see requirements.txt
 requests = "^2.32.3"
 psycopg2-binary = "^2.9.9"
 flask-caching = "^2.3.0"
+# Needed only by POST /api/screenshot, imported lazily.
 selenium = "^4.24.0"
 webdriver-manager = "^4.0.2"
+
+[tool.poetry.group.dev.dependencies]
+hypothesis = "^6.165.9"
 
 
 [build-system]

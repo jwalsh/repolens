@@ -1,0 +1,37 @@
+# R1 study corpus: 20 repositories spanning ecosystems and team sizes.
+#
+# R1 (spec §13) requires a median across "20 repos spanning ecosystems and
+# team sizes". This is that list, pinned here so the substrate experiment and
+# the later claim-yield study measure the same population. Changing it
+# invalidates comparison across runs -- add a new corpus file instead.
+#
+# Blank lines and # comments are ignored.
+
+# --- large, many contributors, long history
+https://github.com/psf/requests.git
+https://github.com/pallets/flask.git
+https://github.com/django/django.git
+https://github.com/expressjs/express.git
+https://github.com/sinatra/sinatra.git
+
+# --- systems and compiled languages
+https://github.com/spf13/cobra.git
+https://github.com/BurntSushi/ripgrep.git
+https://github.com/curl/curl.git
+https://github.com/redis/hiredis.git
+https://github.com/nlohmann/json.git
+
+# --- managed runtimes and frameworks
+https://github.com/google/gson.git
+https://github.com/junit-team/junit4.git
+https://github.com/symfony/console.git
+https://github.com/elixir-ecto/ecto.git
+https://github.com/clojure/tools.cli.git
+
+# --- small teams and single maintainers, where trailer and prose habits
+#     differ most from large-org convention
+https://github.com/tqdm/tqdm.git
+https://github.com/chalk/chalk.git
+https://github.com/mitsuhiko/insta.git
+https://github.com/jarun/nnn.git
+https://github.com/sharkdp/fd.git

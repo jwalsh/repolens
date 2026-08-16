@@ -1,0 +1,8 @@
+# Development and test dependencies. Not installed in production.
+-r requirements.txt
+
+# Property-based testing. The clone store's path containment and the job
+# runner's resume guarantee are claims about whole input spaces -- every
+# repository URL, every interruption schedule -- and example tests answer a
+# different question. See tests/test_clones.py and tests/test_jobs.py.
+hypothesis==6.165.9

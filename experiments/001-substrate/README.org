@@ -1,0 +1,126 @@
+#+TITLE: Experiment 001 — Substrate feasibility
+#+SUBTITLE: Can M-1 carry the R1 study?
+#+AUTHOR: JW
+#+DATE: 2026-08-16
+
+* Why this experiment exists
+
+RFC 028 §21 moved the R1 study from "a weekend of scripting before M2" to
+"after M1", because R1 needs persistent clones across 20 repositories and a
+runner to walk them, and neither existed. That reordering is only correct if
+the substrate M-1 builds can actually carry the study. If it cannot, R1's
+design changes — a smaller corpus, or a host that is not a laptop — and that
+is worth knowing before M0 rather than after.
+
+This is the local-evidence tier. Findings that generalize move to ~.meta/~;
+nothing here is portable until a second repository agrees.
+
+* C1 — Conjecture
+
+A bare-mirror clone store plus a checkpointed runner can materialize and walk
+the R1 study corpus on one developer machine at a cost that makes re-running
+the study routine rather than an event.
+
+"Routine" is doing real work in that sentence. A study you can re-run after
+changing the gate is an instrument; one you run once because it costs an
+afternoon is a ceremony, and a refutation condition you cannot afford to
+re-measure is not a refutation condition.
+
+* Predictions
+
+| id   | prediction                                             | rationale                          |
+|------+--------------------------------------------------------+------------------------------------|
+| P1.1 | 20 bare mirrors fit in under 4 GiB                     | mirrors carry no working tree      |
+| P1.2 | cold materialization completes in under 30 minutes     | network-bound, parallel by repo    |
+| P1.3 | warm re-materialization completes in under 3 minutes   | fetch-only, no objects to transfer |
+| P1.4 | interrupting the runner costs at most one re-execution | at-least-once, exactly-once done   |
+
+P1.1 is the interesting one. It is the whole justification for the bare-mirror
+decision: if mirrors are not materially cheaper than working trees, the design
+bought complexity for nothing and the store should just check out.
+
+* Calibrated gate
+
+Thresholds are in ~run.py~ as module constants, not in prose here, so that
+the gate is executable and cannot drift from its description:
+
+#+begin_src markdown
+DISK_BUDGET_BYTES     4 GiB       refutes P1.1
+COLD_BUDGET_SECONDS   1800        refutes P1.2
+WARM_BUDGET_SECONDS   180         refutes P1.3
+P1.4                              refuted by tests/test_jobs.py, not by run.py
+#+end_src
+
+P1.4 is deliberately not measured here. It is a property of the runner over
+every interruption schedule, not a number from one execution, and
+~TestResumeProperties.test_resume_completes_every_item_exactly_once~ already
+checks it across generated schedules. Measuring it once with a stopwatch would
+be weaker evidence pretending to be stronger.
+
+* How to run
+
+#+begin_src sh
+# Smoke run against the first three repos. Do this first.
+python experiments/001-substrate/run.py --limit 3
+
+# Full corpus. Network, and several GB of disk.
+python experiments/001-substrate/run.py
+
+# Finish an interrupted materialization. Timings from a resumed run are not
+# comparable to a full pass; the log records which it was.
+python experiments/001-substrate/run.py --resume
+#+end_src
+
+Exit status is the verdict: 0 upheld, 1 refuted. Every run appends a record to
+~log.jsonl~ in this directory, so the log is the dated evidence trail and no
+result is overwritten by a later one.
+
+* Refutation consequences
+
+*If P1.1 fails* — mirrors are not cheap enough. Either the corpus shrinks,
+which weakens R1's claim to span ecosystems and team sizes, or the store
+learns partial clone (~--filter=blob:none~). The second is the better answer
+and it is a small change: blame needs blobs, but the commit walk does not, so
+the fact tier could run on a blobless mirror and hydrate blobs only for
+claim-bearing files. Noted here rather than built, because building it before
+measuring is how you optimize the wrong thing.
+
+*If P1.2 or P1.3 fails* — the study moves off the laptop. This does not
+threaten the design, only the ergonomics, and the runner's checkpointing means
+a slow study is an interruptible one rather than a lost one.
+
+*If all hold* — M-1 is done and the R1 study is unblocked. Note that the
+study still needs the forge client per §21 before its threshold means
+anything.
+
+* Log
+
+Machine-readable records are in ~log.jsonl~, append-only, one line per run.
+Each carries the corpus it measured, so a smoke run and the study are never
+confused for each other.
+
+| date       | corpus          | verdict  | note                                |
+|------------+-----------------+----------+-------------------------------------|
+| 2026-08-16 | 2-repo smoke    | UPHELD   | instrument check, not the study     |
+| —          | corpus.txt (20) | NOT RUN  | the actual test of C1               |
+
+*2026-08-16 — smoke run.* chalk and tqdm, 2,499 commits, 9.9 MiB of bare
+mirrors, 13.3 s cold and 0.5 s warm. This establishes that the instrument
+works against real remotes; it does not test C1, because two small repos
+cannot refute a budget written for twenty.
+
+One number from it is worth carrying forward: *4.2 KiB per commit*. If that
+density held across the corpus, P1.1's 4 GiB budget would accommodate roughly
+a million commits, which is far more than twenty repositories of this kind
+carry. That is an encouraging sign and nothing more — density is dominated by
+blob size, and neither chalk nor tqdm has the large binary history that a repo
+like django or curl accumulates. The smoke run samples the cheap end of the
+distribution by construction.
+
+*The full corpus run has not been executed.* Until it is, C1 is registered,
+instrumented, and untested.
+
+The harness is additionally verified against local fixture repositories in
+~tests/test_experiment_001.py~, which exercises measurement and gate
+evaluation with no network at all — including the refutation paths, so we know
+the gate can fail and not merely that it passed once.
