@@ -1,0 +1,411 @@
+#+TITLE: RepoLens — Provenance Lens, Addendum
+#+SUBTITLE: Reconciliation against the codebase; spec v0.1 → v0.2
+#+AUTHOR: JW
+#+DATE: 2026-08-16
+#+OPTIONS: toc:2 num:t
+
+* 16. Status
+
+Spec v0.1 was written without repo access and said so. This addendum closes
+that. It reconciles the §0 assumption ledger against the code, answers §14,
+corrects the parts of §4–§6 that would not have compiled or would have failed
+at runtime, recalibrates R1, and inserts a milestone the original phasing
+assumed away.
+
+Section numbering continues from the spec. Where this document contradicts
+v0.1, this document wins.
+
+One thing did not change: the design decision in §2 — facts and claims in
+separate tiers with separate invalidation — survives contact with the code
+intact. Everything below is about substrate, not about that split.
+
+* 17. Assumption ledger, reconciled
+
+| id | v0.1 assumption                                  | verdict          | evidence                                    |
+|----+--------------------------------------------------+------------------+---------------------------------------------|
+| A1 | Flask, ~main.py~, server-rendered Jinja          | true, thin       | ~main.py~, two templates, one route         |
+| A2 | SQLAlchemy models in ~models.py~, single DB      | *false*          | three ~SQLAlchemy()~ instances, no ~Base~   |
+| A3 | ~repolens/~ is the package                       | true + shadow    | root ~utils/~ duplicates it, unused         |
+| A4 | Repos cloned locally                             | *false in effect*| ~repolens/packager.py:11~                   |
+| A5 | No background job runner                         | true             | ~scripts/~ holds one test file              |
+| A6 | Lenses are snapshot-scoped, not history-scoped   | *false, costly*  | ~repolens/packager.py:42-48~                |
+
+** A4 — the clone does not survive the request
+
+The load-bearing correction. ~package_repository~ clones inside a
+~tempfile.TemporaryDirectory()~ context manager, walks the tree, iterates every
+commit into a Python dict, writes that dict to one JSON column, and lets the
+context manager destroy the clone on the way out.
+
+There is no clone store, no fetch path, no ~--unshallow~, no notion of a
+working copy that outlives a request. §3 and §5 assume a persistent checkout
+that ~git blame -M -C~ can be run against on every HEAD change. That substrate
+does not exist and nothing in the repo is adjacent to it.
+
+Compounding: the clone-and-walk runs synchronously inside ~POST /api/package~.
+At the 50k commits §10 budgets for, that request does not return.
+
+** A6 — commits exist, in the wrong shape
+
+History /is/ collected: ~hexsha~, ~author~, ~message~, ~date~, per commit. But
+into ~Repository.packaged_data~, a single JSON column, with no parents, no file
+deltas, no merge detection, no rename tracking, and no query surface. It is
+also the sole payload of ~GET /api/download~.
+
+So M0 is not the clean build against empty space that §11 implies, nor the
+migration §0 hoped for. It is a build plus a JSON→relational migration of a
+column with a live consumer, plus a rewrite of ~analyzer.py~, whose
+~commit_count~ is ~len(packaged_data['commits'])~ and breaks the moment history
+moves to ~pl_commit~.
+
+** A2 — §4 would not have imported
+
+~from models import Base~ resolves to the root ~models.py~, which defined a
+fourth ~Repository~ with a third schema, was imported by nothing, and had no
+~Base~. The live base is flask-sqlalchemy's ~db.Model~ from
+~repolens.database~. Removed in the repair pass (§24).
+
+** A1 — there is no file view to hang a gutter on
+
+One route (~/~), two templates, 193 lines of ~main.js~ driving four forms
+against the JSON API. No path-parameterized route, no file rendering, no line
+addressing anywhere in the render layer. §8's dossier gutter is a from-scratch
+build. Budget it as one.
+
+* 18. §14 answered
+
+1. *Does RepoLens persist commits?* As JSON entries with four fields. Build,
+   with a migration attached. See §17/A6.
+
+2. *Is there a job runner?* No. Not deferred, not stubbed — no celery, rq, or
+   apscheduler in ~pyproject.toml~, and ~scripts/~ contains a single test file.
+   Backfill checkpointing has nowhere to live. This is an M-1 prerequisite
+   (§22), not an M2 concern.
+
+3. *Is there a forge abstraction?* No. No GitHub API client, no token handling,
+   no reference to ~api.github.com~ anywhere in the tree. ~requests~ is a
+   declared dependency used only by dead code in root ~utils/~. OAuth exists as
+   RFC 020 and RFC 025 plus one stray script. PR bodies and review threads are
+   entirely unbuilt — which is what makes §21 necessary.
+
+4. *Anchor granularity — lines or symbols?* Lines, and not really by choice.
+   There is no symbol layer to anchor to: no parser, no tree-sitter, no
+   language awareness past ~path.split('.')[-1]~ in ~analyzer.py~. A
+   symbol-scoped anchor is a new subsystem, not the cheap-before-M1 schema
+   change §14.4 assumed. Take line ranges as specified and let R3 decide
+   whether to buy the subsystem later.
+
+* 19. Corrections to §4 (schema)
+
+Three changes, all mechanical, all fatal if skipped.
+
+** 19.1 There is no declarative ~Base~
+
+Replace the v0.1 preamble:
+
+#+begin_src python
+# WRONG — root models.py was dead code and defined no Base
+from models import Base
+
+class Commit(Base):
+    __tablename__ = "pl_commit"
+#+end_src
+
+with:
+
+#+begin_src python
+from repolens.database import db
+
+class Commit(db.Model):
+    __tablename__ = "pl_commit"
+#+end_src
+
+and take ~Column~, ~String~, ~Integer~ &c. from ~db~ or from ~sqlalchemy~
+directly — but not from both in the same module, which is how the three
+competing registries happened in the first place.
+
+** 19.2 The foreign key target is ~repository~, not ~repo~
+
+flask-sqlalchemy derives ~__tablename__~ from the class name. ~Repository~
+becomes ~repository~; ~Analysis~ becomes ~analysis~. All four
+~ForeignKey("repo.id")~ in §4 — on ~Commit~, ~CoChangeEdge~, ~Authority~, and
+~Claim~ — must read
+~ForeignKey("repository.id")~. This fails at ~create_all~ with a resolution
+error that names the missing table but not the fix.
+
+** 19.3 ~Enum(ClaimKind)~ persists names; the prompt emits values
+
+The sharpest of the three, because it fails asymmetrically across backends.
+
+~ClaimKind.CONSTRAINT.value~ is ~"constraint"~, and §6's system prompt asks the
+model for exactly that lowercase form. But SQLAlchemy's ~Enum(PyEnum)~ keys on
+member /names/. Verified against SQLAlchemy 2.0.52:
+
+#+begin_src markdown
+sqlite   insert "constraint"  → ACCEPTED, stored verbatim
+         read back via ORM    → LookupError: 'constraint' is not among the
+                                defined enum values. Possible values:
+                                CONSTRAINT, REJECTED
+postgres DDL emits a native ENUM type whose labels are CONSTRAINT, REJECTED
+         insert "constraint"  → rejected at the database
+#+end_src
+
+So a dev suite on SQLite writes happily and explodes on read, while production
+on Postgres fails at insert. Either fix ~Enum(ClaimKind, values_callable=lambda
+kind: [member.value for member in kind])~, or convert in ~ground()~ (§20.1).
+Prefer the ~values_callable~ form: it makes the stored representation match the
+wire representation the prompt already specifies, so there is one vocabulary
+rather than two.
+
+** 19.4 ~extractor~ duplicates ~model_id~ and ~prompt_version~
+
+I4 names the cache key as ~(commit_sha, prompt_version, model_id)~; the actual
+constraint ~uq_pl_claim_dedup~ uses ~extractor~. These agree only because
+~extractor~ string-encodes the other two as ~"llm:{model_id}:{prompt_version}"~.
+That leaves two columns that are derivable from a third and can silently drift
+from it — which is exactly the shape of a cache-invalidation bug that presents
+as stale claims after a prompt bump.
+
+Either drop the two columns and parse ~extractor~ on read, or make ~extractor~
+a generated column. Do not keep all three writable.
+
+* 20. Corrections to §5–§6 (extraction)
+
+** 20.1 ~ground()~ has no kind validation
+
+~kind=c["kind"]~ passes model output straight to an ~Enum~ column. Combined
+with §19.3 this is how the LookupError arrives. Add the conversion, and let it
+double as the validation the schema does not enforce:
+
+#+begin_src python
+try:
+    kind = ClaimKind(c["kind"])
+except (KeyError, ValueError):
+    continue  # unknown kind is an ungrounded claim by another name
+#+end_src
+
+** 20.2 ~find()~ anchors to the first occurrence
+
+~source_text.find(quote)~ takes occurrence one. A quote that appears twice —
+common when a commit body restates a constraint in a summary line — anchors to
+the wrong span, silently, and I1's evidence link points somewhere the author
+did not mean. Search for all occurrences; if there is more than one, either
+take the longest surrounding unique context or drop the claim. Dropping is
+consistent with the recall-loss posture §6 already commits to.
+
+** 20.3 ~should_call~ tests subject lines against body text
+
+The prefix gate matches ~"merge pull request"~, ~"revert \""~, ~"bump "~ —
+subject-line forms. But §6's contract says the input is the body. If body-only
+is passed, a revert's body reads ~This reverts commit abc123…~, misses every
+prefix, and goes to the model. §10's entire cost argument rests on this gate,
+so the ambiguity is worth one sentence in the spec: state whether ~source_text~
+is ~subject + "\n\n" + body~ or body alone, and write the gate to match.
+
+** 20.4 Anchor resolution should be incremental
+
+§5 says cost is "one blame per claim-bearing file per HEAD change, not per
+claim." True, and it does not bound the file count. On a repo with claims
+spread across 3k files, every push re-blames 3k files.
+
+The missing rule is one line:
+
+#+begin_src markdown
+re-blame only files in `git diff --name-only <last_anchored_head>..HEAD`
+carry forward anchors for every other claim-bearing file unchanged
+#+end_src
+
+That converts a per-push full sweep into a per-push delta, and it is free. It
+also changes what R3 measures: survival ratio should be evaluated over the
+carried-forward set, not recomputed from scratch, or the measurement costs more
+than the feature.
+
+** 20.5 Co-change: ~n~ semantics are consistent, but say so
+
+~compute()~ increments ~n~ for every eligible commit including single-file
+ones, so ~P(a) = count_a / n~ counts solo touches in the base rate. That is
+correct — a file touched alone a hundred times /should/ have its lift
+discounted — but it is load-bearing and undocumented, and the obvious "fix"
+of skipping single-file commits would inflate lift for exactly the files the
+filter is meant to suppress. Add the comment before someone helpfully removes
+it.
+
+* 21. R1 is miscalibrated against the instrument that would measure it
+
+The most consequential finding in this addendum, because R1 gates the largest
+chunk of work in the plan.
+
+§14.3 states that claim yield "roughly doubles when PR bodies are available."
+§13's R1 kills the entire claim tier if median yield across 20 repos falls
+below 4%. Per §18.3 there is no forge access in this codebase and building it
+is unscoped.
+
+So R1 as written would be measured on commit bodies alone, against a threshold
+implicitly set for commit-plus-PR. The condition is biased toward firing, and
+firing it deletes M2 on evidence that understates yield by roughly half — by
+the spec's own estimate.
+
+Two ways out, and they are not equivalent:
+
+1. *Fold forge access into M0* and measure R1 on the full corpus. Costs a
+   GitHub client, token handling, and rate-limit budget before any claim work
+   starts. This is the honest option and it is what §9's ~brief~ tool needs
+   anyway.
+
+2. *Restate R1 as commit-body-only* with a re-derived threshold — roughly 2%
+   if the doubling estimate holds — and add a second, later condition on the
+   full corpus once forge access exists.
+
+Either is defensible. What is not defensible is running the weekend study
+against commit bodies and comparing to 4%.
+
+Corollary: the R1 study cannot start until M-1 lands, because it needs
+persistent clones across 20 repos and a runner to walk them. It is no longer a
+weekend of scripting that precedes the build; it is a weekend of scripting that
+follows the first milestone.
+
+* 22. New milestone: M-1 — substrate
+
+§11 begins at the commit walk. The commit walk cannot begin.
+
+*** M-1 scope
+
+- *Clone store.* Persistent checkouts with a fetch/update path and
+  ~--unshallow~ handling. Replaces the ~TemporaryDirectory~ in
+  ~repolens/packager.py~. Needs a disk budget and an eviction rule.
+- *Job runner.* Anything with checkpointing and resumption — the requirement
+  §10 states ("checkpoint by sha so an interrupted backfill resumes") and §14.2
+  correctly flagged as absent.
+- *Migrations.* There is no alembic, no flask-migrate, only ~db.create_all()~,
+  which does not alter existing tables. §4 plus §11's phasing implies at least
+  three schema versions. ~create_all~ cannot deliver them.
+- *Forge client*, if §21 option 1 is chosen.
+
+*** Kill criterion
+
+None. Like M0, it ships regardless, and unlike M0 it also repays itself
+outside the lens: the clone store fixes the synchronous-clone timeout in
+~POST /api/package~ that limits RepoLens today.
+
+*** Revised phasing
+
+| milestone | content                              | model calls | gate     |
+|-----------+--------------------------------------+-------------+----------|
+| M-1       | clone store, runner, migrations      | no          | none     |
+| M0        | fact tier, co-change, authority      | no          | none     |
+| M1        | trailers, anchors, constraint index  | no          | trailer% |
+| —         | R1 study (needs M-1 + forge)         | yes         | —        |
+| M2        | claim tier, dossier, MCP export      | yes         | R1       |
+| M3        | milestone reconstruction             | yes         | M2 yield |
+
+The R1 study moves from "before M2" to "after M1", which is a real schedule
+change: the decision to build the claim tier now arrives two milestones in
+rather than up front.
+
+* 23. Security items in the surface the lens would ship alongside
+
+Not provenance work, but the lens increases the value of what is exposed, so
+these get worse rather than better as it lands.
+
+- ~POST /api/screenshot~ drives headless Chrome at a caller-supplied URL with
+  no authentication. A scheme allowlist was added in the repair pass, which
+  closes ~file://~; it does not close SSRF against internal HTTP services.
+  That needs authentication plus address-range filtering.
+- ~POST /api/package~ clones a caller-supplied URL onto the server, also
+  unauthenticated. M-1's clone store makes this persistent rather than
+  ephemeral — an unauthenticated write primitive against durable disk.
+- ~Chrome~ runs with ~--no-sandbox~.
+
+Both endpoints should be behind the auth that RFC 020/025 describe and that
+nothing implements, before the clone store lands.
+
+* 24. Repair pass applied
+
+Done before this addendum, so the numbers above describe a tree that runs.
+
+*** Baseline
+
+~requirements.txt~ was zero bytes while ~README.md~ instructed installing from
+it. Populated with pinned direct dependencies. Python 3.11 venv, deps
+installed.
+
+*** Registries
+
+~repolens/__init__.py~ defined a third ~SQLAlchemy()~ and called
+~create_all()~ as an import side effect of ~init_app~; it was the direct cause
+of ~unittest~ failing at collection. Reduced to a package docstring. Root
+~models.py~ — a fourth ~Repository~, imported by nothing, and the target of
+§4's ~from models import Base~ — removed.
+
+*** Test suite
+
+~python -m unittest discover~ reported ~OK~ on *zero tests*, because ~tests/~
+had no ~__init__.py~ and discovery skipped it silently. This is worse than the
+collection error it replaced once dependencies were installed: a green light on
+nothing.
+
+With discovery fixed, three further defects surfaced:
+
+- ~tests/test_api.py~ registered the blueprint with no ~url_prefix~ while
+  requesting ~/api/…~. Every request 404'd, and ~test_get_nonexistent_analysis~
+  passed by asserting 404 against a route that did not exist. It never once
+  exercised the endpoint. Now registered at ~/api~ to match ~main.create_app~,
+  and ~db.init_app~ is called, which it never was.
+- ~tests/test_packager.py~ unpacked the ~(repo_id, error)~ tuple as a scalar,
+  and cloned ~https://github.com/psf/requests.git~ over the network. Replaced
+  with a local ~git init~ fixture; added a failure-path case.
+- Both suites wrote through ~main.app~ at module scope. Now build their own app
+  via ~create_app(SQLALCHEMY_DATABASE_URI='sqlite:///:memory:')~, so the suite
+  leaves no ~site.db~ in the tree.
+
+Result: 7 tests, all passing, no environment variables required.
+
+*** Configuration
+
+~create_app~ read ~DATABASE_URL~ with no fallback, so an unset variable handed
+~None~ to SQLAlchemy and failed at ~init_app~ with an error naming neither the
+variable nor the fix — while ~config.py~ sat unused with exactly the fallback
+needed. Wired ~config.Config~ in; added an ~overrides~ parameter so tests
+inject a URI without touching process environment.
+
+*** Leaks and imports
+
+~/api/download~ and ~/api/screenshot~ both wrote ~NamedTemporaryFile(delete=
+False)~ and never unlinked. Both now serve from ~io.BytesIO~; no temp file is
+created. ~selenium~ and ~webdriver-manager~ moved to lazy imports inside the
+screenshot handler — at module scope they took the whole application down when
+absent, for one endpoint unrelated to the product.
+
+*** Deprecations
+
+Five ~Query.get()~ call sites migrated to ~Session.get()~. Legacy in SQLAlchemy
+2.0, removed in 2.1.
+
+*** Documentation
+
+~CLAUDE.md~ documented a table-creation one-liner that is a ~SyntaxError~
+(a ~with~ statement after a ~;~ in ~python -c~) and a single-test invocation
+using a file path where ~unittest~ wants a module path. Both corrected;
+~DATABASE_URL~ documented as optional.
+
+*** Left alone, deliberately
+
+Root ~utils/~ — a parallel older implementation of the analyzer and converter,
+imported by nothing, using a different data shape (~commit_history~ where the
+live code says ~commits~, and full file ~content~ where the live code stores
+only ~size~). Not breaking anything today. It is a schema-drift trap for
+anyone who greps for ~analyze_repository~ and finds two, and it should go —
+but deleting it is a scope call, not a repair.
+
+* 25. What did not change
+
+The §2 facts/claims split, the §13 refutation discipline, and the observation
+that Q3's orphan list is the product's sharpest output all stand. The
+corrections above are about the ground the lens is built on, not the lens.
+
+The honest summary of the delta: v0.1 assumed a repository-analysis platform
+with a history substrate it could extend. What exists is a Flask prototype that
+clones into ~/tmp~, throws the clone away, and stores commit subjects in a JSON
+column. The lens is still the right thing to build. It starts a milestone
+earlier than planned, and the decision point that governs its largest phase
+arrives two milestones later.
