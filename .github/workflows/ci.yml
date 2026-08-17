@@ -24,6 +24,12 @@ jobs:
       # no moving `v10` tag, unlike actions/checkout. `@v10` fails to resolve.
       - uses: astral-sh/setup-uv@v10.0.1
         with:
+          # Pinned, because the requirements check below compares generated
+          # output and uv changes that output between releases -- 0.6 emitted
+          # no `# via` annotations, 0.12 does. An unpinned uv turns this step
+          # into a check of which uv the runner happened to install. Bump this
+          # and regenerate the exports in the same commit.
+          version: "0.12.5"
           enable-cache: true
           # No python-version input here on purpose. `uv sync` reads
           # .python-version and provisions the interpreter itself, which is
@@ -60,10 +66,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Compare pinned content only. uv writes the exact `-o` argument it
-          # was given into the header comment, so exporting to a temp path and
-          # diffing whole files always reports a difference that is not one.
-          content() { grep -v '^#' "$1"; }
+          # Compare pinned content only. Two kinds of comment are noise here:
+          # uv writes the exact `-o` argument it was given into the header, so
+          # exporting to a temp path differs trivially; and the indented
+          # `# via <package>` annotations are provenance, not pins. Strip both.
+          content() { grep -vE '^[[:space:]]*#' "$1"; }
 
           uv export --format requirements-txt --no-dev --no-emit-project -o /tmp/requirements.txt
           uv export --format requirements-txt --no-emit-project -o /tmp/requirements-dev.txt
