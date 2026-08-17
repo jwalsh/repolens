@@ -20,11 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      # Pinned to an exact release: astral-sh/setup-uv publishes v10.0.1 but
+      # no moving `v10` tag, unlike actions/checkout. `@v10` fails to resolve.
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
-          # .python-version pins the interpreter; uv provisions it.
-          python-version-file: .python-version
+          # No python-version input here on purpose. `uv sync` reads
+          # .python-version and provisions the interpreter itself, which is
+          # what happens locally too -- one mechanism, not two.
 
       # repolens/ignores.py resolves .gitattributes at a revision via
       # `git check-attr --source`, which landed in git 2.40. Below that,
