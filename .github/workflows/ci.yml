@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel a superseded run rather than paying for both.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          # .python-version pins the interpreter; uv provisions it.
+          python-version-file: .python-version
+
+      # repolens/ignores.py resolves .gitattributes at a revision via
+      # `git check-attr --source`, which landed in git 2.40. Below that,
+      # TestAttributes SKIPS -- and a skipped suite reporting OK is the exact
+      # failure this repo already hit once with unittest discover. Fail loudly
+      # instead of losing the authored-layer coverage silently.
+      - name: Require git >= 2.40
+        run: |
+          set -euo pipefail
+          git --version
+          version="$(git --version | awk '{print $3}')"
+          major="${version%%.*}"
+          rest="${version#*.}"
+          minor="${rest%%.*}"
+          if [ "$major" -lt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -lt 40 ]; }; then
+            echo "::error::git $version is too old; ignores.py needs >= 2.40 and its tests would skip"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run tests
+        run: uv run python -m unittest discover
+
+      # requirements*.txt are generated from uv.lock, not authored. If someone
+      # changes a dependency and forgets to re-export, the two manifests drift
+      # -- which is what left 38 advisories open against the old poetry.lock.
+      - name: Verify generated requirements are current
+        run: |
+          set -euo pipefail
+
+          # Compare pinned content only. uv writes the exact `-o` argument it
+          # was given into the header comment, so exporting to a temp path and
+          # diffing whole files always reports a difference that is not one.
+          content() { grep -v '^#' "$1"; }
+
+          uv export --format requirements-txt --no-dev --no-emit-project -o /tmp/requirements.txt
+          uv export --format requirements-txt --no-emit-project -o /tmp/requirements-dev.txt
+
+          if ! diff -u <(content requirements.txt) <(content /tmp/requirements.txt); then
+            echo "::error file=requirements.txt::Stale. Regenerate with the uv export command in DEVELOPER.md"
+            exit 1
+          fi
+          if ! diff -u <(content requirements-dev.txt) <(content /tmp/requirements-dev.txt); then
+            echo "::error file=requirements-dev.txt::Stale. Regenerate with the uv export command in DEVELOPER.md"
+            exit 1
+          fi

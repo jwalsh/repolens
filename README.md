@@ -75,5 +75,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Contact
 
-- Project Homepage: https://replit.com/@JasonWalsh1/RepoLens
 - GitHub Repository: https://github.com/jwalsh/repolens
