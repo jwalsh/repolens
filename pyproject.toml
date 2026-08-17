@@ -7,16 +7,31 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-flask = "^3.0.3"
+flask = "^3.1.3"
 flask-sqlalchemy = "^3.1.1"
 alembic = "^1.19.1"
 pathspec = "^1.1.1"
-requests = "^2.32.3"
+requests = "^2.34.2"
 psycopg2-binary = "^2.9.9"
 flask-caching = "^2.3.0"
 # Needed only by POST /api/screenshot, imported lazily.
 selenium = "^4.24.0"
 webdriver-manager = "^4.0.2"
+
+# Security floors on transitive dependencies. These are not imported directly;
+# they are listed so the resolver cannot backtrack onto a version with a known
+# advisory while satisfying some future constraint. Every one corresponds to a
+# Dependabot alert that was open against poetry.lock on 2026-08-16, when the
+# lock was eight versions stale and carried 38 of them.
+#
+# Delete an entry once the direct dependency that pulls it in requires at
+# least this version on its own.
+h11 = ">=0.16.0"        # critical: request smuggling, via selenium
+jinja2 = ">=3.1.6"      # via flask
+werkzeug = ">=3.1.8"    # via flask
+urllib3 = ">=2.7.0"     # via requests, selenium
+idna = ">=3.18"         # via requests
+python-dotenv = ">=1.2.3"  # via webdriver-manager
 
 [tool.poetry.group.dev.dependencies]
 hypothesis = "^6.165.9"

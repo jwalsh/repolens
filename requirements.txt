@@ -22,3 +22,14 @@ pathspec==1.1.1
 # rest of the application runs without them.
 selenium==4.47.0
 webdriver-manager==4.1.2
+
+# Security floors on transitive dependencies, mirroring the block in
+# pyproject.toml. Not imported directly; pinned so pip cannot resolve onto a
+# version with a known advisory. Each corresponds to a Dependabot alert open
+# against poetry.lock on 2026-08-16.
+h11>=0.16.0
+Jinja2>=3.1.6
+Werkzeug>=3.1.8
+urllib3>=2.7.0
+idna>=3.18
+python-dotenv>=1.2.3
