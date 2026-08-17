@@ -9,6 +9,11 @@ alembic==1.19.1
 requests==2.34.2
 psycopg2-binary==2.9.12
 
+# gitignore pattern semantics for the vendored/generated heuristics. Used for
+# matching only -- hierarchical resolution is delegated to git itself, which
+# is the part tools get subtly wrong. See repolens/ignores.py.
+pathspec==1.1.1
+
 # No GitPython. repolens/clones.py and repolens/packager.py invoke git
 # directly, which they must in order to reach --mirror, ls-tree -z, and
 # blame --line-porcelain. It went with utils/, its only importer.

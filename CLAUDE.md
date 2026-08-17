@@ -48,6 +48,10 @@ tests and reports OK.
 - `repolens/forge.py` — GitHub PR bodies and review threads, bulk-paginated.
   `pr_number_from_commit` refuses bare `#123`: that's an issue reference, and
   a wrong PR association is a well-formed citation pointing at the wrong prose.
+- `repolens/ignores.py` — vendored/generated classification. Reads
+  `.gitattributes`, *not* `.gitignore` (a tracked file was never ignored), and
+  resolves at a revision, not HEAD — the same path classifies differently
+  across commits. git does the resolution; pathspec only matches heuristics.
 - Property tests, not example tests, guard both. Repository URLs are
   attacker-controlled and interruption schedules are unbounded, so
   `tests/test_clones.py` and `tests/test_jobs.py` generate their inputs.

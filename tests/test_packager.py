@@ -103,6 +103,29 @@ class TestPackager(unittest.TestCase):
         self.assertEqual(len(packaged['commits']), 2)
         self.assertTrue(packaged['commits_truncated'])
 
+    def test_authorship_summary_is_recorded(self):
+        from tests._fixtures import git
+
+        vendor_dir = os.path.join(self.fixture_path, 'vendor')
+        os.makedirs(vendor_dir, exist_ok=True)
+        with open(os.path.join(vendor_dir, 'dep.js'), 'w') as handle:
+            handle.write('bundled\n')
+        with open(os.path.join(self.fixture_path, 'poetry.lock'), 'w') as handle:
+            handle.write('locked\n')
+        git('add', '-A', cwd=self.fixture_path)
+        git('commit', '-q', '-m', 'add vendored and generated files',
+            cwd=self.fixture_path)
+
+        repo_id, _ = package_repository(self.fixture_path)
+        authorship = db.session.get(Repository, repo_id).packaged_data['authorship']
+
+        self.assertEqual(authorship['total_files'], 4)
+        self.assertEqual(authorship['excluded_files'], 2)  # vendor/, poetry.lock
+        self.assertGreater(authorship['excluded_fraction'], 0.0)
+        # Reported, not filtered -- `files` still lists everything.
+        packaged = db.session.get(Repository, repo_id).packaged_data
+        self.assertEqual(len(packaged['files']), 4)
+
     def test_commit_count_analysis_uses_the_exact_total(self):
         from repolens.analyzer import analyze_repository
         from repolens.models import Analysis

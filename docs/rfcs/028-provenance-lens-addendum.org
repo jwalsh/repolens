@@ -293,8 +293,8 @@ outside the lens: the clone store fixes the synchronous-clone timeout in
 |-----------+--------------------------------------+-------------+----------+------------------|
 | M-1       | clone store, runner, migrations      | no          | none     | landed, see §26  |
 | —         | forge client (§21 option 1)          | no          | none     | landed, see §27  |
+| —         | ignore/generated resolver            | no          | none     | landed, see §28  |
 | M0        | fact tier, co-change, authority      | no          | none     | next             |
-| —         | ignore/generated resolver            | no          | none     | deferred, see §28 |
 | M1        | trailers, anchors, constraint index  | no          | trailer% |                  |
 | —         | R1 study                             | yes         | —        | needs M2 extract |
 | M2        | claim tier, dossier, MCP export      | yes         | R1       |                  |
@@ -612,36 +612,129 @@ exactly the way C1 is.
 Text only, no diffs — I2 applies to what is stored as much as to what is
 prompted. A file of hunks sitting beside the prose is an invitation.
 
-* 28. Deferred: the ignore and generated-file resolver
+* 28. Ignore and generated-file resolver — ~repolens/ignores.py~
 
-Raised, scoped, not built. The spec's §5 uses an inline ~GENERATED~ regex to
-drop vendored and generated paths before counting co-change, and that regex is
-doing more work than it can carry. Notes for when it is picked up:
+Landed 2026-08-16. §5's inline ~GENERATED~ regex carried more weight than a
+regex can. R2 refutes co-change if maintainers judge top-lift neighbours
+unrelated more often than related, and a weak exclusion filter is the most
+likely way to fail R2 for a reason that has nothing to do with whether
+co-change measures coupling. So this lands before the R2 study, not after it.
 
-*~.gitignore~ is the wrong instrument.* A tracked file is by definition one
-that was not ignored, so ~.gitignore~ says almost nothing about the files
-co-change actually counts. It catches only force-added artifacts. The real
-signal is ~.gitattributes~ — ~linguist-generated~ and ~linguist-vendored~ mark
-*tracked* files as machine-authored — plus path heuristics for the repositories
-that never adopted the attribute.
+** Related work, measured
 
-*Ignore rules are versioned.* At commit C the ~.gitattributes~ was different
-from HEAD's. Filtering a ten-year co-change window through today's rules is an
-anachronism, and it interacts with I3: a fact tier that is a pure function of
-the clone must decide whether "the clone" means HEAD or the history. Cheap
-answer: resolve attributes at each commit via ~git check-attr~ against that
-revision. Correct, and one process per commit, so it wants measuring before
-committing to it.
+The obvious move is to copy whatever the search tools do. They have solved a
+neighbouring problem for years and their implementations are battle-tested.
+So: one repository, a root ~.gitignore~ with ~*.log~ and ~!important.log~, a
+nested ~sub/.gitignore~ with ~!debug.log~, put to each tool with git's
+~check-ignore~ as ground truth.
 
-*Composition.* A full resolver has to merge ~.gitattributes~, ~.gitignore~,
-~.git/info/exclude~, ~core.excludesFile~, and the ~.ignore~/~.rgignore~ family
-that ripgrep and fd read. ~pathspec~ is the canonical Python implementation of
-gitignore matching and is what black and pre-commit use; there is no reason to
-hand-roll the glob semantics.
+| tool                        | ~sub/debug.log~ | agrees with git |
+|-----------------------------+-----------------+-----------------|
+| git (~check-ignore~)        | not ignored     | ground truth    |
+| ripgrep 14.1.1              | found           | yes             |
+| ag 2.2.0                    | *dropped*       | *no*            |
+| pathspec, root file only    | *dropped*       | *no*            |
+| ugrep / GNU grep            | n/a             | no ignore model |
 
-*R2 is what this is for.* R2 refutes co-change if maintainers judge top-lift
-neighbours unrelated more often than related. A weak exclusion filter is the
-most likely way to fail R2 for a reason that has nothing to do with whether
-co-change measures coupling — so the resolver should land before the R2 study,
-not after it.
+git's own explanation: ~sub/.gitignore:1:!debug.log~.
 
+ripgrep's ~ignore~ crate reimplements the per-directory hierarchy correctly,
+including negation and deeper-file-wins precedence. *ag does not*, and its
+failure mode is the dangerous direction: it silently drops a file git
+considers live. In co-change terms that is a real source file deleted from
+the graph with no diagnostic.
+
+~pathspec~ is not wrong in the same way. It implements gitignore *pattern*
+semantics correctly and leaves *composition* — the per-directory stack — to
+the caller. Feeding it only the root file is a caller error, and it is exactly
+the error that is easy to make and hard to notice.
+
+GNU grep and ugrep have no ignore model at all, only ~--exclude~ globs. Worth
+stating because it clarifies what the ignore-file ecosystem actually is: a
+convention grown around *tree walking*, not around *file classification*.
+
+*Which is the deeper finding.* Every tool above answers "what should I not
+search". This lens needs "what is not human-authored". Those coincide often
+enough to be tempting and diverge exactly where it matters — a checked-in
+~vendor/~ tree is searched by nobody's default and is precisely what co-change
+must exclude, while a ~.log~ file is ignored by everyone and never appears in
+history at all.
+
+** Three decisions
+
+*It does not read ~.gitignore~.* A tracked file is by definition one that was
+not ignored, so ~.gitignore~ says almost nothing about the files co-change
+counts — it catches only force-added artifacts. The signal that applies to
+*tracked* files is ~.gitattributes~: ~linguist-vendored~ and
+~linguist-generated~ mark machine-authored files that are deliberately
+committed. That is the inversion §28's earlier draft flagged, and it survived
+contact with the implementation.
+
+*Attributes resolve at a revision, not at HEAD.* Not hypothetical. Measured on
+a fixture where ~.gitattributes~ narrows between two commits:
+
+#+begin_src markdown
+api/schema_pb2.py  at commit N-1  →  linguist-generated: set        (authored)
+api/schema_pb2.py  at commit N    →  linguist-generated: unspecified (heuristic)
+#+end_src
+
+Same path, same file, different answer. Filtering a ten-year co-change window
+through today's rules is an anachronism, and it is one that silently changes
+what the graph contains. ~git check-attr --source=<rev>~ resolves against any
+revision *and works in a bare mirror*, which is the only reason correctness
+here is affordable at all. It also batches: ~--stdin -z~ is one process per
+call rather than per path, which retires the cost objection that made the
+earlier draft hedge.
+
+Requires git ≥ 2.40. Below that the authored layer is unavailable and
+~ClassificationStats.attributes_available~ reports ~False~ — the heuristics
+still run, and nothing pretends the authored answer was consulted.
+
+*git resolves; we compose nothing.* We already require the binary and it is
+ground truth by construction. The table above is what reimplementing
+hierarchical precedence looks like when it goes wrong. ~pathspec~ is used only
+for the heuristic layer, where there is no authored answer to defer to.
+
+** Authored beats inferred
+
+The same ordering §6 applies to trailers over model output. An explicit
+~linguist-generated~ attribute wins over any path heuristic, and a heuristic
+never overrides an author who has said a file is theirs. ~Classification~
+carries the ~source~ that decided it — ~gitattributes~, ~heuristic~, ~extra~,
+or ~none~ — so a consumer can weight them differently, and so R2 can be
+re-run against the authored subset alone if the heuristics turn out to be what
+is failing it.
+
+Mutating the resolver to let heuristics win fails the test suite immediately.
+
+** The heuristic list is deliberately short
+
+Every pattern in ~VENDORED_PATTERNS~ and ~GENERATED_PATTERNS~ is a guess that
+can silently delete real source, and R2 is measured against the result. The
+list covers vendor directories, the lockfile family, protocol/IDL output,
+conventional generator suffixes, and autotools — derived from
+github/linguist's ~vendor.yml~ and ~generated.rb~, which is the closest thing
+to a maintained public answer for "is this machine-authored".
+
+Two exclusions worth naming: ~db/migrations/~ stays in, because migrations are
+authored however mechanical they look; and a path merely *named* like a vendor
+one (~src/vendored_notes.md~) stays in. Both are pinned by test.
+
+** Integration
+
+~package_repository~ now records an ~authorship~ summary in ~packaged_data~ —
+total files, excluded count and fraction, a breakdown by source, and whether
+the authored layer was available. *Reported, not filtered.* Deciding what to
+drop belongs to the consumer, and M0's co-change is the first one that will
+care.
+
+** What this does not do
+
+No eviction of the ~.ignore~ / ~.rgignore~ / ~.fdignore~ family, which the
+search tools read and which says nothing about authorship. No ~.hgignore~. No
+Emacs conventions (~.projectile~, ~grep-find-ignored-directories~, backup and
+lockfile patterns) — those describe an editor's view of a working tree, and
+this classifier only ever sees tracked paths in a bare mirror.
+
+Callers who want any of these pass them as ~extra_vendored~ or
+~extra_generated~ in gitignore syntax.

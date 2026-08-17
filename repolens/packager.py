@@ -27,6 +27,7 @@ from pathlib import Path
 
 from repolens.clones import CloneError, CloneStore
 from repolens.database import db
+from repolens.ignores import IgnoreResolver
 from repolens.models import Repository
 
 # How many commits to embed in packaged_data. Not a limit on what is walked --
@@ -132,17 +133,33 @@ def package_repository(repo_url: str) -> tuple[int | None, str | None]:
         return None, f'Error cloning repository: {error}'
 
     try:
+        files = list_files(stats.path)
         repo_data = {
             'name': stats.path.name.rsplit('-', 1)[0],
             'url': repo_url,
             'head_sha': stats.head_sha,
             'commit_count': stats.commit_count,
-            'files': list_files(stats.path),
+            'files': files,
             'commits': list_commits(stats.path),
             'branches': list_branches(stats.path),
         }
     except CloneError as error:
         return None, f'Error reading repository: {error}'
+
+    # How much of this repository is machine-authored. Reported, not filtered:
+    # deciding what to drop belongs to the consumer, and M0's co-change is the
+    # first one that will care. See repolens/ignores.py and RFC 028 §28.
+    resolver = IgnoreResolver(stats.path)
+    classification = resolver.stats(
+        [entry['path'] for entry in files], revision=stats.head_sha
+    )
+    repo_data['authorship'] = {
+        'total_files': classification.total,
+        'excluded_files': classification.excluded,
+        'excluded_fraction': round(classification.excluded_fraction, 4),
+        'by_source': classification.by_source,
+        'attributes_available': classification.attributes_available,
+    }
 
     repo_data['commits_truncated'] = (
         repo_data['commit_count'] > len(repo_data['commits'])
