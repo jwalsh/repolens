@@ -182,3 +182,8 @@ site.db
 # evidence trail for the conjecture, and evidence that lives only on one
 # machine is not evidence.
 .forge/
+
+# Git worktrees checked out inside the repo. Each is its own working copy
+# with its own venv and clone store; nothing in one belongs in the other's
+# history.
+worktrees/
