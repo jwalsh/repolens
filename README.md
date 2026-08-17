@@ -19,9 +19,10 @@ RepoLens helps you gain insights into your software projects by analyzing reposi
 
 ### Prerequisites
 
-- Python 3.11 or higher
-- PostgreSQL database
-- Git
+- [uv](https://docs.astral.sh/uv/) — manages Python and dependencies
+- Git 2.40 or higher (`check-attr --source`, used to classify vendored and
+  generated files at a revision)
+- PostgreSQL, optional — falls back to SQLite when `DATABASE_URL` is unset
 
 ### Installation
 
@@ -33,22 +34,27 @@ RepoLens helps you gain insights into your software projects by analyzing reposi
 
 2. Install dependencies:
    ```bash
+   uv sync
+   ```
+
+   uv provisions Python 3.11+ itself, so no separate interpreter setup is
+   needed. If you would rather use pip, `requirements.txt` is a hash-pinned
+   export of the same lock:
+   ```bash
    pip install -r requirements.txt
    ```
-   
-   Or using Poetry:
-   ```bash
-   poetry install
-   ```
 
-3. Set up environment variables:
+3. Set up environment variables (all optional in development):
    ```bash
    export DATABASE_URL="postgresql://username:password@localhost/repolens"
+   export REPOLENS_CLONE_ROOT=".clones"   # where bare mirrors are kept
+   export GITHUB_TOKEN="$(gh auth token)" # only for the forge client
    ```
 
-4. Run the application:
+4. Apply migrations and run the application:
    ```bash
-   python main.py
+   uv run alembic upgrade head
+   uv run python main.py
    ```
 
 5. Access the web interface at http://localhost:5000

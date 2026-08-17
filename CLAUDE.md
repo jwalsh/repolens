@@ -1,18 +1,35 @@
 # RepoLens Development Guide
 
 ## Commands
-- Run all tests: `python -m unittest discover`
-- Run single test: `python -m unittest tests.test_analyzer` (module path, not a file path)
-- Run app: `python main.py`
-- Install dependencies: `python -m pip install -r requirements.txt`
-- Install dev/test dependencies: `python -m pip install -r requirements-dev.txt`
-- Install with Poetry: `poetry install`
-- Apply migrations: `alembic upgrade head` (not `db.create_all()` — it cannot
-  alter an existing table)
-- Stamp an existing database at the baseline: `alembic stamp e2cefdd6030c`
-- New migration after a model change: `alembic revision --autogenerate -m "..."`
-- Run the substrate experiment: `python experiments/001-substrate/run.py --limit 3`
-- Fetch forge prose: `GITHUB_TOKEN=$(gh auth token) python scripts/fetch_forge_text.py --limit 2`
+
+Dependencies are managed with **uv**. `uv run` syncs the environment from
+`uv.lock` before executing, so there is no activate step and no way to run
+against a stale environment.
+
+- Set up / sync: `uv sync`
+- Run all tests: `uv run python -m unittest discover`
+- Run single test: `uv run python -m unittest tests.test_analyzer` (module path, not a file path)
+- Run app: `uv run python main.py`
+- Add a dependency: `uv add <package>` (updates `pyproject.toml` and `uv.lock`)
+- Add a dev dependency: `uv add --dev <package>`
+- Re-resolve everything to newest: `uv lock --upgrade`
+- Apply migrations: `uv run alembic upgrade head` (not `db.create_all()` — it
+  cannot alter an existing table)
+- Stamp an existing database at the baseline: `uv run alembic stamp e2cefdd6030c`
+- New migration after a model change: `uv run alembic revision --autogenerate -m "..."`
+- Run the substrate experiment: `uv run python experiments/001-substrate/run.py --limit 3`
+- Fetch forge prose: `GITHUB_TOKEN=$(gh auth token) uv run python scripts/fetch_forge_text.py --limit 2`
+
+`requirements.txt` and `requirements-dev.txt` are **generated**, not authored.
+They exist so the pip path in the README keeps working and so scanners that
+do not read `uv.lock` still see something. Regenerate after any dependency
+change — two hand-maintained manifests drifting apart is what produced 38
+open advisories on 2026-08-16:
+
+```
+uv export --format requirements-txt --no-dev --no-emit-project -o requirements.txt
+uv export --format requirements-txt --no-emit-project -o requirements-dev.txt
+```
 
 `tests/__init__.py` must exist or `unittest discover` silently collects zero
 tests and reports OK.

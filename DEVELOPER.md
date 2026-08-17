@@ -33,40 +33,62 @@ repolens/
    cd repolens
    ```
 
-2. Set up a virtual environment:
+2. Install dependencies:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   uv sync
    ```
 
-3. Install dependencies:
-   ```bash
-   pip install -e .  # Install in development mode
-   # OR
-   poetry install
-   ```
+   uv creates and manages `.venv` itself and provisions a suitable Python.
+   There is no activate step: `uv run <command>` syncs from `uv.lock` first,
+   so it is not possible to run against a stale environment.
 
-4. Set up local database:
+3. Set up local database (optional — SQLite is the fallback):
    ```bash
    export DATABASE_URL="postgresql://username:password@localhost/repolens"
    ```
 
-5. Run the application in development mode:
+4. Apply migrations and run the application:
    ```bash
-   python main.py
+   uv run alembic upgrade head
+   uv run python main.py
    ```
+
+## Dependencies
+
+`pyproject.toml` and `uv.lock` are the source of truth.
+
+```bash
+uv add <package>          # runtime dependency
+uv add --dev <package>    # test/dev dependency
+uv lock --upgrade         # re-resolve everything to newest
+```
+
+`requirements.txt` and `requirements-dev.txt` are **generated** hash-pinned
+exports, kept so the pip path and dependency scanners still work. Regenerate
+them after any dependency change:
+
+```bash
+uv export --format requirements-txt --no-dev --no-emit-project -o requirements.txt
+uv export --format requirements-txt --no-emit-project -o requirements-dev.txt
+```
+
+Do not hand-edit them. Two independently maintained manifests drifting apart
+is exactly what left 38 advisories open against the old `poetry.lock`.
 
 ## Testing
 
 Run the full test suite:
 ```bash
-python -m unittest discover
+uv run python -m unittest discover
 ```
 
-Run a specific test file:
+Run a specific test module (module path, not a file path):
 ```bash
-python -m unittest tests/test_analyzer.py
+uv run python -m unittest tests.test_analyzer
 ```
+
+`tests/__init__.py` must exist or discovery silently collects zero tests and
+reports OK.
 
 ## Code Style Guidelines
 
