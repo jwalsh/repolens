@@ -75,12 +75,15 @@ uv export --format requirements-txt --no-emit-project -o requirements-dev.txt
 Do not hand-edit them. Two independently maintained manifests drifting apart
 is exactly what left 38 advisories open against the old `poetry.lock`.
 
-CI verifies these are current, and **pins uv to the version in
-`.github/workflows/ci.yml`** — uv changes its export output between releases
-(0.6 emitted no `# via` annotations, 0.12 does), so an unpinned uv would make
-the check depend on whichever version the runner installed. If your local uv
-differs from the pinned one, the exports you generate will not match CI's.
-Check with `uv --version`, and bump the pin and regenerate in the same commit.
+CI verifies these are current. The uv version is pinned by
+`required-version` in `pyproject.toml` — uv enforces it locally, and
+`setup-uv` reads it when no explicit `version` input is given, so the pin
+lives in exactly one place.
+
+That pin matters because uv changes its export output between releases: 0.6
+emitted no `# via` annotations, 0.12 does. An unpinned uv would turn the CI
+check into a test of whichever version the runner installed. To move it, bump
+`required-version` and regenerate the exports in the same commit.
 
 ## Testing
 

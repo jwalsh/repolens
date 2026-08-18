@@ -45,9 +45,7 @@ from pathlib import Path
 
 import pathspec
 
-# Minimum git for `check-attr --source=<rev>`. Without it the authored layer
-# is unavailable and only heuristics apply -- reported, never faked.
-MIN_GIT_FOR_SOURCE = (2, 40)
+from repolens.gitcheck import require_git
 
 ATTR_VENDORED = 'linguist-vendored'
 ATTR_GENERATED = 'linguist-generated'
@@ -137,25 +135,6 @@ class ClassificationStats:
         return self.excluded / self.total if self.total else 0.0
 
 
-def git_supports_attr_source(git_version: str | None = None) -> bool:
-    """Whether `git check-attr --source` is available."""
-    if git_version is None:
-        try:
-            git_version = subprocess.run(
-                ['git', '--version'], capture_output=True, text=True, check=True
-            ).stdout
-        except (OSError, subprocess.CalledProcessError):
-            return False
-
-    digits: list[int] = []
-    for token in git_version.split():
-        parts = token.split('.')
-        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-            digits = [int(parts[0]), int(parts[1])]
-            break
-    return bool(digits) and tuple(digits) >= MIN_GIT_FOR_SOURCE
-
-
 class IgnoreResolver:
     """Classifies tracked paths as vendored or generated at a revision."""
 
@@ -168,7 +147,14 @@ class IgnoreResolver:
         use_attributes: bool = True,
     ) -> None:
         self.clone_path = Path(clone_path)
-        self.use_attributes = use_attributes and git_supports_attr_source()
+
+        if use_attributes:
+            # Raise rather than quietly fall back to heuristics. Dropping the
+            # authored layer changes the answers without changing the shape of
+            # the result, which is indistinguishable from working. Ask for
+            # use_attributes=False to accept heuristics only.
+            require_git()
+        self.use_attributes = use_attributes
 
         self._vendored = _spec(VENDORED_PATTERNS)
         self._generated = _spec(GENERATED_PATTERNS)

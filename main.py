@@ -3,6 +3,7 @@ from flask import Flask, render_template
 from config import Config
 from repolens.api import api_bp, init_app as init_api
 from repolens.database import db
+from repolens.gitcheck import require_git
 
 
 def create_app(config_object: type = Config, **overrides: object) -> Flask:
@@ -11,6 +12,10 @@ def create_app(config_object: type = Config, **overrides: object) -> Flask:
     ``overrides`` lets tests inject a database URI without setting process
     environment variables.
     """
+    # Fail at startup, not on the first request that needs it. Everything
+    # RepoLens does is git; there is no useful degraded mode.
+    require_git()
+
     app = Flask(__name__)
 
     app.config.from_object(config_object)

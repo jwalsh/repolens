@@ -30,12 +30,12 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from repolens.clones import CloneStore
+from repolens.gitcheck import supports_attr_source
 from repolens.ignores import (
     GENERATED_PATTERNS,
     VENDORED_PATTERNS,
     Classification,
     IgnoreResolver,
-    git_supports_attr_source,
 )
 from tests._fixtures import git, make_repo
 
@@ -45,22 +45,6 @@ def _write(root: str, relative: str, content: str = 'x\n') -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as handle:
         handle.write(content)
-
-
-class TestGitVersionGate(unittest.TestCase):
-    def test_recognises_supported_versions(self):
-        self.assertTrue(git_supports_attr_source('git version 2.49.0'))
-        self.assertTrue(git_supports_attr_source('git version 2.40.0'))
-        self.assertTrue(git_supports_attr_source('git version 3.0.0'))
-
-    def test_recognises_unsupported_versions(self):
-        self.assertFalse(git_supports_attr_source('git version 2.39.5'))
-        self.assertFalse(git_supports_attr_source('git version 1.9.1'))
-
-    def test_unparseable_version_is_not_assumed_supported(self):
-        # Better to lose the authored layer than to fake it.
-        self.assertFalse(git_supports_attr_source('git version banana'))
-        self.assertFalse(git_supports_attr_source(''))
 
 
 class TestHeuristics(unittest.TestCase):
@@ -160,7 +144,7 @@ class TestAttributes(unittest.TestCase):
     """The authored layer, against a real bare mirror."""
 
     def setUp(self):
-        if not git_supports_attr_source():
+        if not supports_attr_source():
             self.skipTest('git predates check-attr --source')
 
         self.work_dir = tempfile.TemporaryDirectory()
@@ -301,7 +285,7 @@ class TestAttributes(unittest.TestCase):
 
 class TestPathsWithAwkwardCharacters(unittest.TestCase):
     def setUp(self):
-        if not git_supports_attr_source():
+        if not supports_attr_source():
             self.skipTest('git predates check-attr --source')
 
         self.work_dir = tempfile.TemporaryDirectory()

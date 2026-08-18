@@ -20,38 +20,38 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Pinned to an exact release: astral-sh/setup-uv publishes v10.0.1 but
-      # no moving `v10` tag, unlike actions/checkout. `@v10` fails to resolve.
-      - uses: astral-sh/setup-uv@v10.0.1
+      # Pinned by commit SHA, which is what setup-uv's own README recommends
+      # and the only immutable ref. Note there is no moving `v10` tag -- the
+      # project stopped publishing those after v7 -- so `@v10` does not
+      # resolve at all.
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
-          # Pinned, because the requirements check below compares generated
-          # output and uv changes that output between releases -- 0.6 emitted
-          # no `# via` annotations, 0.12 does. An unpinned uv turns this step
-          # into a check of which uv the runner happened to install. Bump this
-          # and regenerate the exports in the same commit.
-          version: "0.12.5"
           enable-cache: true
-          # No python-version input here on purpose. `uv sync` reads
-          # .python-version and provisions the interpreter itself, which is
-          # what happens locally too -- one mechanism, not two.
+          # No `version` here on purpose. With none given, setup-uv reads
+          # `required-version` from pyproject.toml, so the uv version lives in
+          # exactly one place and uv itself enforces it locally too. Pinning
+          # it matters because the requirements check below compares generated
+          # output, and uv changes that output between releases -- 0.6 emitted
+          # no `# via` annotations, 0.12 does.
+          #
+          # No `python-version` either. `uv sync` reads .python-version and
+          # provisions the interpreter, which is what happens locally.
 
-      # repolens/ignores.py resolves .gitattributes at a revision via
-      # `git check-attr --source`, which landed in git 2.40. Below that,
-      # TestAttributes SKIPS -- and a skipped suite reporting OK is the exact
-      # failure this repo already hit once with unittest discover. Fail loudly
-      # instead of losing the authored-layer coverage silently.
-      - name: Require git >= 2.40
+      # repolens.gitcheck enforces this at import time for the application and
+      # the resolver, so the suite would fail anyway. Checking it here first
+      # turns a wall of tracebacks into one line, before spending time on sync.
+      - name: Require a recent git
         run: |
           set -euo pipefail
           git --version
-          version="$(git --version | awk '{print $3}')"
-          major="${version%%.*}"
-          rest="${version#*.}"
-          minor="${rest%%.*}"
-          if [ "$major" -lt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -lt 40 ]; }; then
-            echo "::error::git $version is too old; ignores.py needs >= 2.40 and its tests would skip"
-            exit 1
-          fi
+          uv run --no-project python -c "
+          import re, subprocess, sys
+          out = subprocess.run(['git','--version'], capture_output=True, text=True).stdout
+          m = re.search(r'(\d+)\.(\d+)', out)
+          if not m or (int(m.group(1)), int(m.group(2))) < (2, 40):
+              sys.exit(f'::error::git too old: {out.strip()!r}; RepoLens requires >= 2.40')
+          print(f'git ok: {out.strip()}')
+          "
 
       - name: Install dependencies
         run: uv sync

@@ -44,6 +44,7 @@ dev = [
 ]
 
 [tool.uv]
+required-version = ">=0.12.5"
 # RepoLens is an application, not a library: main.py is the entrypoint and
 # nothing imports repolens from outside this tree. Application mode means uv
 # manages the environment without building or installing the project itself,

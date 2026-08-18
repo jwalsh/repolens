@@ -19,9 +19,14 @@ RepoLens helps you gain insights into your software projects by analyzing reposi
 
 ### Prerequisites
 
-- [uv](https://docs.astral.sh/uv/) — manages Python and dependencies
-- Git 2.40 or higher (`check-attr --source`, used to classify vendored and
-  generated files at a revision)
+- **Git 2.40 or newer.** Enforced, not suggested: the app refuses to start on
+  anything older. `check-attr --source` arrived in 2.40 and is how vendored
+  and generated files are classified at a revision rather than at HEAD.
+  Without it the answers get quietly worse, which is harder to notice than a
+  crash.
+- **[uv](https://docs.astral.sh/uv/)** — manages Python and dependencies. The
+  required version is declared as `required-version` in `pyproject.toml` and
+  uv enforces it itself.
 - PostgreSQL, optional — falls back to SQLite when `DATABASE_URL` is unset
 
 ### Installation

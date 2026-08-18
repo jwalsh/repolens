@@ -65,6 +65,11 @@ tests and reports OK.
 - `repolens/forge.py` — GitHub PR bodies and review threads, bulk-paginated.
   `pr_number_from_commit` refuses bare `#123`: that's an issue reference, and
   a wrong PR association is a well-formed citation pointing at the wrong prose.
+- `repolens/gitcheck.py` — git 2.40 is **required**, not detected.
+  `create_app` and `IgnoreResolver` both call `require_git()` and raise. The
+  degraded path still exists but must be asked for by name
+  (`use_attributes=False`); silent degradation is how this repo has already
+  been bitten twice.
 - `repolens/ignores.py` — vendored/generated classification. Reads
   `.gitattributes`, *not* `.gitignore` (a tracked file was never ignored), and
   resolves at a revision, not HEAD — the same path classifies differently
