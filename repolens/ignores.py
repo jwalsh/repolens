@@ -90,6 +90,12 @@ GENERATED_PATTERNS: tuple[str, ...] = (
     '**/*_pb.js',
     '**/*.pb.cc',
     '**/*.pb.h',
+    # Rails commits its schema by convention -- `rails db:migrate` rewrites it
+    # from the migrations, and it is meant to be checked in. Earned by audit:
+    # rubygems.org tracks db/schema.rb and 248 of its 12,561 commits touch it.
+    # See experiments/002-heuristic-coverage.
+    '**/db/schema.rb',
+    '**/db/structure.sql',
     # Conventional generator markers.
     '**/*.generated.*',
     '**/*_generated.go',
@@ -294,8 +300,26 @@ def _check_attr(
             continue
         vendored, generated = result[path]
         if attribute == ATTR_VENDORED:
-            vendored = value == 'set'
+            vendored = _is_set(value)
         elif attribute == ATTR_GENERATED:
-            generated = value == 'set'
+            generated = _is_set(value)
         result[path] = (vendored, generated)
     return result
+
+
+# `foo` reports as "set"; `foo=true` reports as the literal "true". Both mean
+# the same thing to linguist, and the `=true` spelling is not exotic --
+# kubernetes/kubernetes writes every one of its linguist-generated rules that
+# way. Matching only "set" silently drops the authored layer for those repos,
+# which is the failure this whole module exists to avoid.
+_TRUTHY_ATTR = frozenset({'set', 'true'})
+
+
+def _is_set(value: str) -> bool:
+    """Whether a git attribute value means the attribute is on.
+
+    Everything else -- "unset", "false", "unspecified", or any other custom
+    value -- is off. `-linguist-vendored` and `linguist-vendored=false` are
+    both an author saying the file is theirs, and are honoured as such.
+    """
+    return value.strip().lower() in _TRUTHY_ATTR

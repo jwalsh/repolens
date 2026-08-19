@@ -79,6 +79,26 @@ class TestHeuristics(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(self._classify(path).generated, path)
 
+    def test_rails_schema_is_generated(self):
+        # Earned by auditing rubygems.org, which tracks db/schema.rb: Rails
+        # rewrites it from the migrations and commits it by convention.
+        for path in ('db/schema.rb', 'db/structure.sql', 'apps/web/db/schema.rb'):
+            with self.subTest(path=path):
+                self.assertTrue(self._classify(path).generated, path)
+
+    def test_rails_schema_pattern_is_not_overbroad(self):
+        # Only the generated pair, not everything under db/ or anything that
+        # merely starts with "schema".
+        for path in (
+            'db/migrate/20260101_add_users.rb',
+            'db/seeds.rb',
+            'db/schema_helper.rb',
+            'app/models/schema.rb',
+            'lib/structure.sql',
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(self._classify(path).excluded, path)
+
     def test_protocol_output_is_generated(self):
         for path in ('api/schema_pb2.py', 'gen/service.pb.go', 'x/thing_pb.js'):
             with self.subTest(path=path):
@@ -281,6 +301,59 @@ class TestAttributes(unittest.TestCase):
         stats = resolver.stats(['vendor/dep.js'])
 
         self.assertFalse(stats.attributes_available)
+
+
+class TestAttributeValueSpellings(unittest.TestCase):
+    """`foo`, `foo=true` and `foo=false` are three different git values.
+
+    kubernetes/kubernetes writes every linguist-generated rule as `=true`.
+    Matching only the bare "set" spelling silently drops the authored layer
+    for those repositories -- the exact failure this module exists to avoid.
+    """
+
+    def setUp(self):
+        if not supports_attr_source():
+            self.skipTest('git predates check-attr --source')
+
+        self.work_dir = tempfile.TemporaryDirectory()
+        self.source = os.path.join(self.work_dir.name, 'source')
+        make_repo(self.source, commits=1)
+
+        _write(self.source, 'a/bare.go')
+        _write(self.source, 'b/istrue.go')
+        _write(self.source, 'c/isfalse.go')
+        _write(self.source, 'd/unset.go')
+        _write(
+            self.source,
+            '.gitattributes',
+            'a/bare.go linguist-generated\n'
+            'b/istrue.go linguist-generated=true\n'
+            'c/isfalse.go linguist-generated=false\n'
+            'd/unset.go -linguist-generated\n',
+        )
+        git('add', '-A', cwd=self.source)
+        git('commit', '-q', '-m', 'attribute spellings', cwd=self.source)
+
+        store = CloneStore(root=os.path.join(self.work_dir.name, 'clones'))
+        self.resolver = IgnoreResolver(store.ensure(self.source).path)
+
+    def tearDown(self):
+        self.work_dir.cleanup()
+
+    def test_bare_and_true_both_mean_generated(self):
+        result = self.resolver.classify(['a/bare.go', 'b/istrue.go'])
+
+        self.assertTrue(result['a/bare.go'].generated, 'bare spelling')
+        self.assertTrue(result['b/istrue.go'].generated, '=true spelling')
+        for path in ('a/bare.go', 'b/istrue.go'):
+            self.assertEqual(result[path].source, 'gitattributes')
+
+    def test_false_and_unset_mean_authored(self):
+        result = self.resolver.classify(['c/isfalse.go', 'd/unset.go'])
+
+        # An author saying "this is mine", in either spelling.
+        self.assertFalse(result['c/isfalse.go'].excluded, '=false spelling')
+        self.assertFalse(result['d/unset.go'].excluded, '-attr spelling')
 
 
 class TestPathsWithAwkwardCharacters(unittest.TestCase):

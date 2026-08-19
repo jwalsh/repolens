@@ -1,0 +1,211 @@
+#+TITLE: Experiment 002 — Heuristic coverage across ecosystems
+#+SUBTITLE: C2, refuted
+#+AUTHOR: JW
+#+DATE: 2026-08-19
+
+* Why this experiment exists
+
+~repolens/ignores.py~ was written against synthetic fixtures and two small
+JavaScript/Python repositories. Its ~VENDORED_PATTERNS~ and
+~GENERATED_PATTERNS~ derive from github/linguist, which is a good source, but
+"derived from a good source" is not evidence about the repositories RepoLens
+will actually be pointed at.
+
+RFC 028 §28 says every pattern is a guess that can silently delete real
+source, and R2 refutes co-change if maintainers judge top-lift neighbours
+unrelated. A heuristic that misses a whole ecosystem's generated-file
+convention fails R2 for a reason that has nothing to do with whether
+co-change measures coupling. So: point it at ecosystems it was not calibrated
+on and see what it misses.
+
+* C2 — Conjecture
+
+The heuristics in ~ignores.py~ have no ecosystem-shaped blind spots: across a
+sample spanning Clojure, Emacs Lisp, Scheme, and Ruby/Rails, every tracked
+machine-authored file is either excluded or absent.
+
+** Calibrated gate
+
+#+begin_src markdown
+REFUTED if any sampled repository tracks a machine-authored file family that
+         the classifier does not exclude.
+UPHELD  if every machine-authored file in the sample is excluded, or is
+         absent because the ecosystem gitignores it.
+#+end_src
+
+The instrument is ~scripts/audit_repo.py~, which reports SUSPECTS — files
+matching known machine-authored conventions the classifier does *not* act on.
+Reporting rather than excluding is the point: a script that quietly applied
+what it suspected could not discover that the suspicion was right.
+
+* Result — 2026-08-19: REFUTED, twice over
+
+| repo                  | commits | files | excluded |    % | attrs | verdict      |
+|-----------------------+---------+-------+----------+------+-------+--------------|
+| clojure/clojure       |   3,659 |   352 |        0 | 0.0% | no    | clean        |
+| magit/magit           |  13,655 |    83 |        0 | 0.0% | no    | clean        |
+| wingo/fibers          |     383 |    82 |        0 | 0.0% | no    | clean        |
+| rubygems/rubygems.org |  12,561 | 1,817 |       22 | 1.2% | no    | *one miss*   |
+| prometheus/prometheus |       — | 1,666 |       18 | 1.1% | yes   | *parser bug* |
+
+The second refutation is worse than the first and was not what the experiment
+went looking for.
+
+** The bug: ~linguist-generated=true~ was not recognised
+
+Sampling for a repository that actually uses the authored layer turned up
+kubernetes/kubernetes, whose ~.gitattributes~ spells every rule as
+~linguist-generated=true~ rather than bare ~linguist-generated~. Checked
+against git:
+
+#+begin_src markdown
+a/bare.go     linguist-generated          →  check-attr reports  "set"
+b/istrue.go   linguist-generated=true     →  check-attr reports  "true"
+c/isfalse.go  linguist-generated=false    →  check-attr reports  "false"
+d/unset.go    -linguist-generated         →  check-attr reports  "unset"
+#+end_src
+
+~_check_attr~ tested ~value == 'set'~. The ~=true~ spelling therefore read as
+*not set*, so every generated file in a kubernetes-style repository would have
+been silently reclassified as authored — the authored layer failing open, in
+the one direction the whole module exists to prevent.
+
+Fixed: ~set~ and ~true~ both mean on; ~unset~, ~false~ and anything else mean
+off, so ~-linguist-vendored~ and ~linguist-vendored=false~ are both honoured as
+an author saying the file is theirs. Reverting the fix fails the new test.
+
+This is the sharpest kind of finding available: not a missing pattern, but a
+correct-looking parser that had never met the second-most-common spelling of
+its input. Fixtures written by the same person who wrote the parser cannot
+find it. A real repository can.
+
+** The miss: ~db/schema.rb~
+
+Rails rewrites ~db/schema.rb~ from the migrations on every ~db:migrate~ and
+commits it by convention. It is generated, it is tracked, and the classifier
+did not exclude it. Same for its alternate form ~db/structure.sql~.
+
+Fixed: both added to ~GENERATED_PATTERNS~ with tests, including a
+not-overbroad test — ~db/migrate/~, ~db/seeds.rb~ and ~db/schema_helper.rb~
+must survive.
+
+** The three "clean" results are a finding, not a null result
+
+Clojure, Emacs and Guile all came back at 0% excluded, and the reason matters:
+those ecosystems *gitignore* their build output. ~.elc~, Guile's ~.go~ object
+files, ~target/~ and ~.cpcache~ never become tracked files, so they never
+reach this classifier at all.
+
+That is §28's central claim arriving from the other direction. ~.gitignore~
+handles most machine output by keeping it out of history; what survives as a
+tracked file is mostly genuinely authored. The exceptions are the ones a
+convention *tells* you to commit — lockfiles, and Rails' schema. Those are
+precisely what the heuristics must catch, and they are a much shorter list
+than "everything a build produces".
+
+** Churn data, which tempers the finding
+
+From rubygems.org, commits touching each path:
+
+#+begin_src markdown
+Gemfile.lock          3,876 / 12,561   (31% of all commits)  already excluded
+vendor/cache            593                                  already excluded
+app/models/rubygem.rb   395                                   authored
+db/schema.rb            248                                   THE MISS
+#+end_src
+
+~db/schema.rb~ is generated and should be excluded, but it is not a dominant
+hub — it ranks below ordinary source files. The real hub is ~Gemfile.lock~ at
+nearly a third of all commits, and that was already handled. So the fix is
+correct but modest; it does not rescue co-change from a catastrophe, it closes
+a gap that would have added noise.
+
+Worth stating plainly because the opposite claim would have been more
+flattering and is not supported by the numbers.
+
+** ~.gem~ files: correctly *not* excluded
+
+rubygems.org tracks 21 ~.gem~ files, all under ~test/gems/~. They are binary,
+they look like build artifacts, and they are deliberate test fixtures. The
+classifier leaves them alone, which is right. A pattern on ~*.gem~ would have
+deleted real test data from the graph — the exact failure §28 warns about.
+
+* An orphaned attribute rule, and why it is interesting
+
+prometheus tracks a ~.gitattributes~ declaring exactly one rule:
+
+#+begin_src markdown
+web/api/v1/testdata/openapi_golden.yaml linguist-generated
+#+end_src
+
+That file is no longer tracked. The rule outlived its target, and
+~check-attr~ still resolves it happily, because attributes apply to *paths*,
+not to files that exist.
+
+This is the same artifact as §8's orphan list — an assertion still asserted
+about code that is gone. It arrived here from a completely different
+direction, which is mild evidence that the orphan surface the spec proposes
+is a real category and not a construct of the claim tier. Worth remembering
+when M1 builds it: ~.gitattributes~ is a second, free source of orphans, with
+no model involved.
+
+The audit now reports declared-rule count separately from matched-file count
+for exactly this reason. Inferring "has attributes" from "something was
+excluded by attributes" conflates *no rules* with *rules matching nothing*,
+and those are different facts about a repository.
+
+* Instrument bugs found and fixed
+
+Two, both in ~audit_repo.py~ rather than in the classifier — suspects are
+reported and never acted on, so neither could have corrupted a result. Noting
+them because an instrument that cries wolf stops being read.
+
+- *The Guile ~.go~ suspect matched all 722 Go files in prometheus.* Guile
+  compiles to ~.go~, which collides exactly with Go source. Suspect rules are
+  now gated on the repository actually being that ecosystem — the Scheme rules
+  only fire where ~.scm~ files exist. The collision was noted in a code
+  comment when the rule was written and still shipped, which is the ordinary
+  fate of a caveat that is not executable.
+- *"No attributes" was inferred rather than read.* Described above.
+
+* Side finding for experiment 001 (P1.1)
+
+rubygems.org is a *659 MiB* bare mirror on its own. P1.1 budgets 4 GiB for
+twenty repositories, and the 001 smoke run measured 4.2 KiB/commit against two
+small JavaScript libraries — an estimate this repository blows apart at
+roughly 55 KiB/commit.
+
+Six repositories of this size would exhaust the budget. That does not refute
+P1.1 yet, since the corpus is mostly smaller projects, but it does mean the
+smoke run's density figure should not be extrapolated, exactly as
+~001-substrate/README.org~ warned. Recorded here so the full corpus run is
+read with it in hand.
+
+* How to re-run
+
+#+begin_src sh
+uv run python scripts/audit_repo.py \
+  https://github.com/clojure/clojure.git \
+  https://github.com/magit/magit.git \
+  https://github.com/wingo/fibers.git \
+  https://github.com/rubygems/rubygems.org.git
+#+end_src
+
+* What this experiment did not cover
+
+Go (~vendor/~ trees are the archetype and none was sampled), Java/Maven
+(~target/~, generated sources), C# (~*.designer.cs~ is in the pattern list but
+untested against a real repository), and monorepos, where ~**/db/schema.rb~
+style patterns matter most and were only unit-tested.
+
+A repository whose ~linguist-*~ rules actually *match* live files. prometheus
+declares one and it matches nothing; kubernetes has seven that certainly do
+match, but at roughly 2 GiB it was not worth cloning to prove a parser fix
+that a four-line fixture already pins. So the authored layer has now been
+exercised against a real ~.gitattributes~, but not yet against one doing real
+work.
+
+Also unmeasured: whether excluding ~db/schema.rb~ actually changes a
+co-change graph. It cannot be, until M0 exists. Everything here is about what
+the classifier sees, not about what the exclusion buys — and R2 is the
+condition that decides whether it buys anything.
